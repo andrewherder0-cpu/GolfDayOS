@@ -1,4 +1,20 @@
 import { randomUUID } from "crypto";
+import { eq, and, or, ilike, desc, asc, inArray, sql } from "drizzle-orm";
+import { db } from "./db";
+import {
+  users,
+  groups,
+  memberships,
+  courses,
+  events,
+  polls,
+  pollOptions,
+  votes,
+  rsvps,
+  pairings,
+  pairingMembers,
+  activityLogs,
+} from "@shared/schema";
 import type {
   User,
   InsertUser,
@@ -99,6 +115,604 @@ export interface IStorage {
   getEventActivityLogs(eventId: string): Promise<ActivityLog[]>;
 }
 
+export class DatabaseStorage implements IStorage {
+  // Helper function to generate join codes
+  private generateJoinCode(): string {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let code = "";
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  }
+
+  // Users
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    if (!user) return undefined;
+    return {
+      ...user,
+      createdAt: user.createdAt.toISOString(),
+    };
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    if (!user) return undefined;
+    return {
+      ...user,
+      createdAt: user.createdAt.toISOString(),
+    };
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db.insert(users).values({
+      email: insertUser.email,
+      passwordHash: insertUser.password,
+      name: insertUser.name,
+      phone: insertUser.phone,
+    }).returning();
+    return {
+      ...user,
+      createdAt: user.createdAt.toISOString(),
+    };
+  }
+
+  async updateUser(id: string, updates: Partial<Omit<User, "id" | "passwordHash" | "createdAt">>): Promise<User | undefined> {
+    const [user] = await db.update(users)
+      .set(updates)
+      .where(eq(users.id, id))
+      .returning();
+    if (!user) return undefined;
+    return {
+      ...user,
+      createdAt: user.createdAt.toISOString(),
+    };
+  }
+
+  // Groups
+  async getGroup(id: string): Promise<Group | undefined> {
+    const [group] = await db.select().from(groups).where(eq(groups.id, id));
+    if (!group) return undefined;
+    return {
+      ...group,
+      createdAt: group.createdAt.toISOString(),
+    };
+  }
+
+  async getGroupByJoinCode(joinCode: string): Promise<Group | undefined> {
+    const [group] = await db.select().from(groups).where(eq(groups.joinCode, joinCode));
+    if (!group) return undefined;
+    return {
+      ...group,
+      createdAt: group.createdAt.toISOString(),
+    };
+  }
+
+  async createGroup(insertGroup: InsertGroup, ownerId: string): Promise<Group> {
+    const joinCode = this.generateJoinCode();
+    const [group] = await db.insert(groups).values({
+      name: insertGroup.name,
+      joinCode,
+      ownerId,
+    }).returning();
+    return {
+      ...group,
+      createdAt: group.createdAt.toISOString(),
+    };
+  }
+
+  async getUserGroups(userId: string): Promise<Group[]> {
+    const result = await db
+      .select({
+        id: groups.id,
+        name: groups.name,
+        joinCode: groups.joinCode,
+        ownerId: groups.ownerId,
+        createdAt: groups.createdAt,
+      })
+      .from(memberships)
+      .innerJoin(groups, eq(memberships.groupId, groups.id))
+      .where(eq(memberships.userId, userId));
+    
+    return result.map(g => ({
+      ...g,
+      createdAt: g.createdAt.toISOString(),
+    }));
+  }
+
+  // Memberships
+  async getMembership(userId: string, groupId: string): Promise<Membership | undefined> {
+    const [membership] = await db
+      .select()
+      .from(memberships)
+      .where(and(eq(memberships.userId, userId), eq(memberships.groupId, groupId)));
+    if (!membership) return undefined;
+    return {
+      ...membership,
+      joinedAt: membership.joinedAt.toISOString(),
+    };
+  }
+
+  async getGroupMemberships(groupId: string): Promise<Membership[]> {
+    const result = await db
+      .select()
+      .from(memberships)
+      .where(eq(memberships.groupId, groupId));
+    return result.map(m => ({
+      ...m,
+      joinedAt: m.joinedAt.toISOString(),
+    }));
+  }
+
+  async createMembership(insertMembership: InsertMembership): Promise<Membership> {
+    const [membership] = await db.insert(memberships).values(insertMembership).returning();
+    return {
+      ...membership,
+      joinedAt: membership.joinedAt.toISOString(),
+    };
+  }
+
+  // Courses
+  async getCourse(id: string): Promise<Course | undefined> {
+    const [course] = await db.select().from(courses).where(eq(courses.id, id));
+    if (!course) return undefined;
+    return {
+      ...course,
+      createdAt: course.createdAt.toISOString(),
+    };
+  }
+
+  async searchCourses(query?: string, filters?: { city?: string; region?: string; tag?: string }): Promise<Course[]> {
+    const conditions = [eq(courses.isActive, true)];
+
+    if (query) {
+      conditions.push(
+        or(
+          ilike(courses.name, `%${query}%`),
+          ilike(courses.city, `%${query}%`),
+          ilike(courses.region, `%${query}%`),
+          sql`EXISTS (SELECT 1 FROM unnest(${courses.tags}) AS tag WHERE tag ILIKE ${`%${query}%`})`
+        )!
+      );
+    }
+
+    if (filters?.city) {
+      conditions.push(ilike(courses.city, filters.city));
+    }
+
+    if (filters?.region) {
+      conditions.push(ilike(courses.region, filters.region));
+    }
+
+    if (filters?.tag) {
+      conditions.push(sql`${filters.tag} ILIKE ANY(${courses.tags})`);
+    }
+
+    const result = await db
+      .select()
+      .from(courses)
+      .where(and(...conditions));
+
+    return result.map(c => ({
+      ...c,
+      createdAt: c.createdAt.toISOString(),
+    }));
+  }
+
+  async createCourse(insertCourse: InsertCourse): Promise<Course> {
+    const [course] = await db.insert(courses).values(insertCourse).returning();
+    return {
+      ...course,
+      createdAt: course.createdAt.toISOString(),
+    };
+  }
+
+  async updateCourse(id: string, updates: Partial<InsertCourse>): Promise<Course | undefined> {
+    const [course] = await db
+      .update(courses)
+      .set(updates)
+      .where(eq(courses.id, id))
+      .returning();
+    if (!course) return undefined;
+    return {
+      ...course,
+      createdAt: course.createdAt.toISOString(),
+    };
+  }
+
+  // Events
+  async getEvent(id: string): Promise<Event | undefined> {
+    const [event] = await db.select().from(events).where(eq(events.id, id));
+    if (!event) return undefined;
+    return {
+      ...event,
+      deadlinesJson: event.deadlinesJson ? JSON.stringify(event.deadlinesJson) : undefined,
+      createdAt: event.createdAt.toISOString(),
+      updatedAt: event.updatedAt.toISOString(),
+    };
+  }
+
+  async getGroupEvents(groupId: string): Promise<Event[]> {
+    const result = await db
+      .select()
+      .from(events)
+      .where(eq(events.groupId, groupId));
+    return result.map(e => ({
+      ...e,
+      deadlinesJson: e.deadlinesJson ? JSON.stringify(e.deadlinesJson) : undefined,
+      createdAt: e.createdAt.toISOString(),
+      updatedAt: e.updatedAt.toISOString(),
+    }));
+  }
+
+  async getUserUpcomingEvents(userId: string): Promise<Event[]> {
+    const result = await db
+      .select({
+        id: events.id,
+        groupId: events.groupId,
+        title: events.title,
+        state: events.state,
+        capacity: events.capacity,
+        notes: events.notes,
+        chosenCourseId: events.chosenCourseId,
+        chosenDate: events.chosenDate,
+        createdBy: events.createdBy,
+        deadlinesJson: events.deadlinesJson,
+        createdAt: events.createdAt,
+        updatedAt: events.updatedAt,
+      })
+      .from(events)
+      .innerJoin(memberships, eq(events.groupId, memberships.groupId))
+      .where(and(
+        eq(memberships.userId, userId),
+        sql`${events.state} != 'closed'`
+      ));
+
+    return result.map(e => ({
+      ...e,
+      deadlinesJson: e.deadlinesJson ? JSON.stringify(e.deadlinesJson) : undefined,
+      createdAt: e.createdAt.toISOString(),
+      updatedAt: e.updatedAt.toISOString(),
+    }));
+  }
+
+  async createEvent(insertEvent: InsertEvent, createdBy: string): Promise<Event> {
+    const [event] = await db.insert(events).values({
+      ...insertEvent,
+      createdBy,
+      state: "draft",
+    }).returning();
+    return {
+      ...event,
+      deadlinesJson: event.deadlinesJson ? JSON.stringify(event.deadlinesJson) : undefined,
+      createdAt: event.createdAt.toISOString(),
+      updatedAt: event.updatedAt.toISOString(),
+    };
+  }
+
+  async updateEvent(id: string, updates: Partial<Event>): Promise<Event | undefined> {
+    const updateData: any = { ...updates };
+    if (updates.deadlinesJson !== undefined) {
+      updateData.deadlinesJson = updates.deadlinesJson ? JSON.parse(updates.deadlinesJson) : null;
+    }
+    updateData.updatedAt = new Date();
+
+    const [event] = await db
+      .update(events)
+      .set(updateData)
+      .where(eq(events.id, id))
+      .returning();
+    if (!event) return undefined;
+    return {
+      ...event,
+      deadlinesJson: event.deadlinesJson ? JSON.stringify(event.deadlinesJson) : undefined,
+      createdAt: event.createdAt.toISOString(),
+      updatedAt: event.updatedAt.toISOString(),
+    };
+  }
+
+  // Polls
+  async getPoll(id: string): Promise<Poll | undefined> {
+    const [poll] = await db.select().from(polls).where(eq(polls.id, id));
+    if (!poll) return undefined;
+    return {
+      ...poll,
+      closesAt: poll.closesAt ? poll.closesAt.toISOString() : undefined,
+      createdAt: poll.createdAt.toISOString(),
+    };
+  }
+
+  async getEventPolls(eventId: string): Promise<Poll[]> {
+    const result = await db
+      .select()
+      .from(polls)
+      .where(eq(polls.eventId, eventId));
+    return result.map(p => ({
+      ...p,
+      closesAt: p.closesAt ? p.closesAt.toISOString() : undefined,
+      createdAt: p.createdAt.toISOString(),
+    }));
+  }
+
+  async createPoll(insertPoll: InsertPoll): Promise<Poll> {
+    const pollData: any = { ...insertPoll };
+    if (insertPoll.closesAt) {
+      pollData.closesAt = new Date(insertPoll.closesAt);
+    }
+    const [poll] = await db.insert(polls).values(pollData).returning();
+    return {
+      ...poll,
+      closesAt: poll.closesAt ? poll.closesAt.toISOString() : undefined,
+      createdAt: poll.createdAt.toISOString(),
+    };
+  }
+
+  async updatePoll(id: string, updates: Partial<Poll>): Promise<Poll | undefined> {
+    const updateData: any = { ...updates };
+    if (updates.closesAt !== undefined) {
+      updateData.closesAt = updates.closesAt ? new Date(updates.closesAt) : null;
+    }
+    const [poll] = await db
+      .update(polls)
+      .set(updateData)
+      .where(eq(polls.id, id))
+      .returning();
+    if (!poll) return undefined;
+    return {
+      ...poll,
+      closesAt: poll.closesAt ? poll.closesAt.toISOString() : undefined,
+      createdAt: poll.createdAt.toISOString(),
+    };
+  }
+
+  // Poll Options
+  async getPollOption(id: string): Promise<PollOption | undefined> {
+    const [option] = await db.select().from(pollOptions).where(eq(pollOptions.id, id));
+    if (!option) return undefined;
+    return {
+      ...option,
+      createdAt: option.createdAt.toISOString(),
+    };
+  }
+
+  async getPollOptions(pollId: string): Promise<PollOption[]> {
+    const result = await db
+      .select()
+      .from(pollOptions)
+      .where(eq(pollOptions.pollId, pollId));
+    return result.map(o => ({
+      ...o,
+      createdAt: o.createdAt.toISOString(),
+    }));
+  }
+
+  async createPollOption(insertOption: InsertPollOption): Promise<PollOption> {
+    const [option] = await db.insert(pollOptions).values(insertOption).returning();
+    return {
+      ...option,
+      createdAt: option.createdAt.toISOString(),
+    };
+  }
+
+  // Votes
+  async getVote(pollId: string, userId: string): Promise<Vote | undefined> {
+    const [vote] = await db
+      .select()
+      .from(votes)
+      .where(and(eq(votes.pollId, pollId), eq(votes.userId, userId)));
+    if (!vote) return undefined;
+    return {
+      ...vote,
+      createdAt: vote.createdAt.toISOString(),
+    };
+  }
+
+  async getPollVotes(pollId: string): Promise<Vote[]> {
+    const result = await db
+      .select()
+      .from(votes)
+      .where(eq(votes.pollId, pollId));
+    return result.map(v => ({
+      ...v,
+      createdAt: v.createdAt.toISOString(),
+    }));
+  }
+
+  async createVote(insertVote: InsertVote): Promise<Vote> {
+    const [vote] = await db.insert(votes).values(insertVote).returning();
+    return {
+      ...vote,
+      createdAt: vote.createdAt.toISOString(),
+    };
+  }
+
+  // RSVPs
+  async getRsvp(eventId: string, userId: string): Promise<Rsvp | undefined> {
+    const [rsvp] = await db
+      .select()
+      .from(rsvps)
+      .where(and(eq(rsvps.eventId, eventId), eq(rsvps.userId, userId)));
+    if (!rsvp) return undefined;
+    return {
+      ...rsvp,
+      claimedExpiresAt: rsvp.claimedExpiresAt ? rsvp.claimedExpiresAt.toISOString() : undefined,
+      createdAt: rsvp.createdAt.toISOString(),
+      updatedAt: rsvp.updatedAt.toISOString(),
+    };
+  }
+
+  async getEventRsvps(eventId: string): Promise<Rsvp[]> {
+    const result = await db
+      .select()
+      .from(rsvps)
+      .where(eq(rsvps.eventId, eventId));
+    return result.map(r => ({
+      ...r,
+      claimedExpiresAt: r.claimedExpiresAt ? r.claimedExpiresAt.toISOString() : undefined,
+      createdAt: r.createdAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
+    }));
+  }
+
+  async createRsvp(insertRsvp: InsertRsvp): Promise<Rsvp> {
+    const rsvpData: any = { ...insertRsvp };
+    if (insertRsvp.claimedExpiresAt) {
+      rsvpData.claimedExpiresAt = new Date(insertRsvp.claimedExpiresAt);
+    }
+    const [rsvp] = await db.insert(rsvps).values(rsvpData).returning();
+    return {
+      ...rsvp,
+      claimedExpiresAt: rsvp.claimedExpiresAt ? rsvp.claimedExpiresAt.toISOString() : undefined,
+      createdAt: rsvp.createdAt.toISOString(),
+      updatedAt: rsvp.updatedAt.toISOString(),
+    };
+  }
+
+  async updateRsvp(id: string, updates: Partial<Rsvp>): Promise<Rsvp | undefined> {
+    const updateData: any = { ...updates };
+    if (updates.claimedExpiresAt !== undefined) {
+      updateData.claimedExpiresAt = updates.claimedExpiresAt ? new Date(updates.claimedExpiresAt) : null;
+    }
+    updateData.updatedAt = new Date();
+
+    const [rsvp] = await db
+      .update(rsvps)
+      .set(updateData)
+      .where(eq(rsvps.id, id))
+      .returning();
+    if (!rsvp) return undefined;
+    return {
+      ...rsvp,
+      claimedExpiresAt: rsvp.claimedExpiresAt ? rsvp.claimedExpiresAt.toISOString() : undefined,
+      createdAt: rsvp.createdAt.toISOString(),
+      updatedAt: rsvp.updatedAt.toISOString(),
+    };
+  }
+
+  // Pairings
+  async getPairing(id: string): Promise<Pairing | undefined> {
+    const [pairing] = await db.select().from(pairings).where(eq(pairings.id, id));
+    if (!pairing) return undefined;
+    return {
+      ...pairing,
+      createdAt: pairing.createdAt.toISOString(),
+    };
+  }
+
+  async getEventPairings(eventId: string): Promise<Pairing[]> {
+    const result = await db
+      .select()
+      .from(pairings)
+      .where(eq(pairings.eventId, eventId));
+    return result.map(p => ({
+      ...p,
+      createdAt: p.createdAt.toISOString(),
+    }));
+  }
+
+  async createPairing(insertPairing: InsertPairing): Promise<Pairing> {
+    const [pairing] = await db.insert(pairings).values(insertPairing).returning();
+    return {
+      ...pairing,
+      createdAt: pairing.createdAt.toISOString(),
+    };
+  }
+
+  async updatePairing(id: string, updates: Partial<Pairing>): Promise<Pairing | undefined> {
+    const [pairing] = await db
+      .update(pairings)
+      .set(updates)
+      .where(eq(pairings.id, id))
+      .returning();
+    if (!pairing) return undefined;
+    return {
+      ...pairing,
+      createdAt: pairing.createdAt.toISOString(),
+    };
+  }
+
+  async deletePairing(id: string): Promise<void> {
+    await db.delete(pairingMembers).where(eq(pairingMembers.pairingId, id));
+    await db.delete(pairings).where(eq(pairings.id, id));
+  }
+
+  // Pairing Members
+  async getPairingMember(id: string): Promise<PairingMember | undefined> {
+    const [member] = await db.select().from(pairingMembers).where(eq(pairingMembers.id, id));
+    if (!member) return undefined;
+    return {
+      ...member,
+      createdAt: member.createdAt.toISOString(),
+    };
+  }
+
+  async getPairingMembers(pairingId: string): Promise<PairingMember[]> {
+    const result = await db
+      .select()
+      .from(pairingMembers)
+      .where(eq(pairingMembers.pairingId, pairingId));
+    return result.map(m => ({
+      ...m,
+      createdAt: m.createdAt.toISOString(),
+    }));
+  }
+
+  async createPairingMember(insertMember: InsertPairingMember): Promise<PairingMember> {
+    const [member] = await db.insert(pairingMembers).values(insertMember).returning();
+    return {
+      ...member,
+      createdAt: member.createdAt.toISOString(),
+    };
+  }
+
+  async updatePairingMember(id: string, updates: Partial<PairingMember>): Promise<PairingMember | undefined> {
+    const [member] = await db
+      .update(pairingMembers)
+      .set(updates)
+      .where(eq(pairingMembers.id, id))
+      .returning();
+    if (!member) return undefined;
+    return {
+      ...member,
+      createdAt: member.createdAt.toISOString(),
+    };
+  }
+
+  async deletePairingMember(id: string): Promise<void> {
+    await db.delete(pairingMembers).where(eq(pairingMembers.id, id));
+  }
+
+  // Activity Logs
+  async createActivityLog(insertLog: InsertActivityLog): Promise<ActivityLog> {
+    const logData: any = { ...insertLog };
+    if (insertLog.payloadJson) {
+      logData.payloadJson = JSON.parse(insertLog.payloadJson);
+    }
+    const [log] = await db.insert(activityLogs).values(logData).returning();
+    return {
+      ...log,
+      payloadJson: log.payloadJson ? JSON.stringify(log.payloadJson) : undefined,
+      createdAt: log.createdAt.toISOString(),
+    };
+  }
+
+  async getEventActivityLogs(eventId: string): Promise<ActivityLog[]> {
+    const result = await db
+      .select()
+      .from(activityLogs)
+      .where(eq(activityLogs.eventId, eventId))
+      .orderBy(desc(activityLogs.createdAt));
+    return result.map(l => ({
+      ...l,
+      payloadJson: l.payloadJson ? JSON.stringify(l.payloadJson) : undefined,
+      createdAt: l.createdAt.toISOString(),
+    }));
+  }
+}
+
+/*
+// Backup: MemStorage implementation
 export class MemStorage implements IStorage {
   private users: Map<string, User> = new Map();
   private groups: Map<string, Group> = new Map();
@@ -475,5 +1089,6 @@ export class MemStorage implements IStorage {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 }
+*/
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

@@ -8,6 +8,14 @@ Golf Day OS helps groups organize golf events with a complete workflow: draft cr
 
 ## Recent Changes
 
+- **October 30, 2025**: Production-ready PostgreSQL database migration
+  - Migrated from in-memory storage to PostgreSQL with Drizzle ORM
+  - Created complete database schema with 12 tables and proper relations
+  - Implemented DatabaseStorage class with all 35+ storage methods
+  - All tables created: users, groups, memberships, courses, events, polls, pollOptions, votes, rsvps, pairings, pairingMembers, activityLogs
+  - Verified end-to-end functionality: signup, auth, groups, courses, RSVPs all working
+  - Production-grade persistence with foreign key constraints and proper indexes
+
 - **October 30, 2025**: Critical authentication optimization
   - Implemented AuthProvider context to centralize authentication state
   - Fixed duplicate /api/auth/me queries (was hammering backend, now single call)
@@ -35,7 +43,8 @@ Golf Day OS helps groups organize golf events with a complete workflow: draft cr
 - **Authentication**: Centralized via AuthProvider context (client/src/lib/AuthProvider.tsx)
 
 ### Backend (Express.js + TypeScript)
-- **Storage**: In-memory storage (MemStorage) - upgradeable to PostgreSQL
+- **Storage**: PostgreSQL database with Drizzle ORM (DatabaseStorage)
+- **Database**: 12 tables with foreign key relationships and proper indexes
 - **Authentication**: Session-based with HTTP-only cookies, bcrypt password hashing
 - **API Routes**:
   - `/api/auth` - signup, login, logout, user management
@@ -66,11 +75,12 @@ None specified yet.
 - **Runtime**: Node.js 20
 - **Frontend**: React 18, TypeScript, Vite
 - **Backend**: Express.js, TypeScript
+- **Database**: PostgreSQL (Neon) with Drizzle ORM
 - **Styling**: Tailwind CSS, Shadcn UI components
 - **Fonts**: Inter (primary), JetBrains Mono (code/join codes)
 - **State**: TanStack Query v5
-- **Validation**: Zod schemas
-- **Storage**: In-memory (MemStorage) - ready for PostgreSQL migration
+- **Validation**: Zod schemas with Drizzle-Zod integration
+- **Storage**: DatabaseStorage (PostgreSQL) - production-ready persistence
 
 ## Development
 
@@ -105,9 +115,11 @@ The application runs on port 5000 with both frontend and backend served together
 
 ## Future Enhancements
 
-- PostgreSQL database integration
 - Real email notifications (SendGrid/similar)
-- ICS calendar downloads
+- ICS calendar downloads  
 - Bulk nudge for non-voters/non-RSVPs
+- Drag-and-drop pairing management
 - Scoring and handicap tracking
 - Payment integration
+- Retry loop for join-code generation (edge case handling)
+- Connection pooling optimization for high-traffic scenarios

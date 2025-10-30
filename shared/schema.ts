@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { pgTable, serial, varchar, text, timestamp, integer, boolean, jsonb, pgEnum, real } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
+import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 
 // ===== USER SCHEMA =====
 export const userSchema = z.object({
@@ -267,3 +270,270 @@ export const insertActivityLogSchema = z.object({
 
 export type ActivityLog = z.infer<typeof activityLogSchema>;
 export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
+
+// ========================================
+// DRIZZLE ORM DATABASE SCHEMA
+// ========================================
+
+// Enums
+export const membershipRoleEnumDb = pgEnum("membership_role", ["owner", "member"]);
+export const eventStateEnumDb = pgEnum("event_state", ["draft", "polling", "rsvp", "final", "closed"]);
+export const pollTypeEnumDb = pgEnum("poll_type", ["course", "date"]);
+export const pollVisibilityEnumDb = pgEnum("poll_visibility", ["live", "hidden"]);
+export const rsvpStatusEnumDb = pgEnum("rsvp_status", ["joined", "waitlisted", "withdrawn"]);
+
+// Tables  
+export const users = pgTable("users", {
+  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  passwordHash: varchar("password_hash", { length: 255 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  phone: varchar("phone", { length: 50 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const groups = pgTable("groups", {
+  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: varchar("name", { length: 255 }).notNull(),
+  joinCode: varchar("join_code", { length: 20 }).notNull().unique(),
+  ownerId: varchar("owner_id", { length: 36 }).notNull().references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const memberships = pgTable("memberships", {
+  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  groupId: varchar("group_id", { length: 36 }).notNull().references(() => groups.id),
+  role: membershipRoleEnumDb("role").notNull(),
+  joinedAt: timestamp("joined_at").notNull().defaultNow(),
+});
+
+export const courses = pgTable("courses", {
+  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: varchar("name", { length: 255 }).notNull(),
+  city: varchar("city", { length: 100 }).notNull(),
+  region: varchar("region", { length: 100 }).notNull(),
+  lat: real("lat"),
+  lng: real("lng"),
+  tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+  feeNote: text("fee_note"),
+  website: varchar("website", { length: 500 }),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const events = pgTable("events", {
+  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  groupId: varchar("group_id", { length: 36 }).notNull().references(() => groups.id),
+  title: varchar("title", { length: 255 }).notNull(),
+  state: eventStateEnumDb("state").notNull().default("draft"),
+  capacity: integer("capacity").notNull(),
+  notes: text("notes"),
+  chosenCourseId: varchar("chosen_course_id", { length: 36 }).references(() => courses.id),
+  chosenDate: varchar("chosen_date", { length: 20 }),
+  createdBy: varchar("created_by", { length: 36 }).notNull().references(() => users.id),
+  deadlinesJson: jsonb("deadlines_json"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const polls = pgTable("polls", {
+  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  eventId: varchar("event_id", { length: 36 }).notNull().references(() => events.id),
+  type: pollTypeEnumDb("type").notNull(),
+  closesAt: timestamp("closes_at"),
+  visibility: pollVisibilityEnumDb("visibility").notNull().default("live"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const pollOptions = pgTable("poll_options", {
+  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  pollId: varchar("poll_id", { length: 36 }).notNull().references(() => polls.id),
+  label: varchar("label", { length: 255 }).notNull(),
+  courseId: varchar("course_id", { length: 36 }).references(() => courses.id),
+  dateOption: varchar("date_option", { length: 20 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const votes = pgTable("votes", {
+  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  pollId: varchar("poll_id", { length: 36 }).notNull().references(() => polls.id),
+  optionId: varchar("option_id", { length: 36 }).notNull().references(() => pollOptions.id),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const rsvps = pgTable("rsvps", {
+  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  eventId: varchar("event_id", { length: 36 }).notNull().references(() => events.id),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  status: rsvpStatusEnumDb("status").notNull(),
+  positionInt: integer("position_int"),
+  claimedExpiresAt: timestamp("claimed_expires_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const pairings = pgTable("pairings", {
+  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  eventId: varchar("event_id", { length: 36 }).notNull().references(() => events.id),
+  name: varchar("name", { length: 255 }).notNull(),
+  teeTimeText: varchar("tee_time_text", { length: 50 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const pairingMembers = pgTable("pairing_members", {
+  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  pairingId: varchar("pairing_id", { length: 36 }).notNull().references(() => pairings.id),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  orderInt: integer("order_int").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const activityLogs = pgTable("activity_logs", {
+  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  eventId: varchar("event_id", { length: 36 }).references(() => events.id),
+  actorId: varchar("actor_id", { length: 36 }).notNull().references(() => users.id),
+  action: varchar("action", { length: 100 }).notNull(),
+  payloadJson: jsonb("payload_json"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Relations
+export const usersRelations = relations(users, ({ many }) => ({
+  memberships: many(memberships),
+  ownedGroups: many(groups),
+  createdEvents: many(events),
+  votes: many(votes),
+  rsvps: many(rsvps),
+  pairingMembers: many(pairingMembers),
+  activityLogs: many(activityLogs),
+}));
+
+export const groupsRelations = relations(groups, ({ one, many }) => ({
+  owner: one(users, {
+    fields: [groups.ownerId],
+    references: [users.id],
+  }),
+  memberships: many(memberships),
+  events: many(events),
+}));
+
+export const membershipsRelations = relations(memberships, ({ one }) => ({
+  user: one(users, {
+    fields: [memberships.userId],
+    references: [users.id],
+  }),
+  group: one(groups, {
+    fields: [memberships.groupId],
+    references: [groups.id],
+  }),
+}));
+
+export const eventsRelations = relations(events, ({ one, many }) => ({
+  group: one(groups, {
+    fields: [events.groupId],
+    references: [groups.id],
+  }),
+  creator: one(users, {
+    fields: [events.createdBy],
+    references: [users.id],
+  }),
+  chosenCourse: one(courses, {
+    fields: [events.chosenCourseId],
+    references: [courses.id],
+  }),
+  polls: many(polls),
+  rsvps: many(rsvps),
+  pairings: many(pairings),
+  activityLogs: many(activityLogs),
+}));
+
+export const pollsRelations = relations(polls, ({ one, many }) => ({
+  event: one(events, {
+    fields: [polls.eventId],
+    references: [events.id],
+  }),
+  options: many(pollOptions),
+  votes: many(votes),
+}));
+
+export const pollOptionsRelations = relations(pollOptions, ({ one, many }) => ({
+  poll: one(polls, {
+    fields: [pollOptions.pollId],
+    references: [polls.id],
+  }),
+  course: one(courses, {
+    fields: [pollOptions.courseId],
+    references: [courses.id],
+  }),
+  votes: many(votes),
+}));
+
+export const votesRelations = relations(votes, ({ one }) => ({
+  poll: one(polls, {
+    fields: [votes.pollId],
+    references: [polls.id],
+  }),
+  option: one(pollOptions, {
+    fields: [votes.optionId],
+    references: [pollOptions.id],
+  }),
+  user: one(users, {
+    fields: [votes.userId],
+    references: [users.id],
+  }),
+}));
+
+export const rsvpsRelations = relations(rsvps, ({ one }) => ({
+  event: one(events, {
+    fields: [rsvps.eventId],
+    references: [events.id],
+  }),
+  user: one(users, {
+    fields: [rsvps.userId],
+    references: [users.id],
+  }),
+}));
+
+export const pairingsRelations = relations(pairings, ({ one, many }) => ({
+  event: one(events, {
+    fields: [pairings.eventId],
+    references: [events.id],
+  }),
+  members: many(pairingMembers),
+}));
+
+export const pairingMembersRelations = relations(pairingMembers, ({ one }) => ({
+  pairing: one(pairings, {
+    fields: [pairingMembers.pairingId],
+    references: [pairings.id],
+  }),
+  user: one(users, {
+    fields: [pairingMembers.userId],
+    references: [users.id],
+  }),
+}));
+
+export const activityLogsRelations = relations(activityLogs, ({ one }) => ({
+  event: one(events, {
+    fields: [activityLogs.eventId],
+    references: [events.id],
+  }),
+  actor: one(users, {
+    fields: [activityLogs.actorId],
+    references: [users.id],
+  }),
+}));
+
+// Drizzle-Zod Schemas for validation
+export const insertUserSchemaDb = createInsertSchema(users, {
+  email: z.string().email(),
+  password: z.string().min(6), // Will be hashed to passwordHash
+  name: z.string().min(1),
+  phone: z.string().optional(),
+}).omit({ id: true, createdAt: true });
+
+export const selectUserSchemaDb = createSelectSchema(users);
+export type UserDb = typeof users.$inferSelect;
+export type InsertUserDb = z.infer<typeof insertUserSchemaDb>;
