@@ -51,7 +51,7 @@ export default function Courses() {
   });
 
   const { data: googleResults, isLoading: googleLoading, refetch: searchGoogle } = useQuery<GooglePlaceResult[]>({
-    queryKey: ["/api/courses/search-google", googleSearchQuery],
+    queryKey: [`/api/courses/search-google?query=${encodeURIComponent(googleSearchQuery)}`],
     enabled: false,
   });
 
