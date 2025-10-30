@@ -7,11 +7,22 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Search, Plus, Upload, MapPin, ExternalLink } from "lucide-react";
+import { Search, Plus, Upload, MapPin, ExternalLink, Star } from "lucide-react";
 import type { Course, InsertCourse } from "@shared/schema";
+
+interface GooglePlaceResult {
+  googlePlaceId: string;
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  rating?: number;
+  userRatingsTotal?: number;
+}
 
 export default function Courses() {
   const queryClient = useQueryClient();
@@ -19,6 +30,7 @@ export default function Courses() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [searchQuery, setSearchQuery] = useState("");
+  const [googleSearchQuery, setGoogleSearchQuery] = useState("");
   const [newCourseOpen, setNewCourseOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   
@@ -38,6 +50,11 @@ export default function Courses() {
     queryKey: ["/api/courses", searchQuery],
   });
 
+  const { data: googleResults, isLoading: googleLoading, refetch: searchGoogle } = useQuery<GooglePlaceResult[]>({
+    queryKey: ["/api/courses/search-google", googleSearchQuery],
+    enabled: false,
+  });
+
   const createMutation = useMutation({
     mutationFn: (data: InsertCourse) => apiRequest<Course>("POST", "/api/courses", data),
     onSuccess: () => {
@@ -53,6 +70,18 @@ export default function Courses() {
         website: "",
         isActive: true,
       });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to add course", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const addFromGoogleMutation = useMutation({
+    mutationFn: (place: GooglePlaceResult) => 
+      apiRequest<Course>("POST", "/api/courses/add-from-google", place),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/courses"] });
+      toast({ title: "Course added from Google Maps!" });
     },
     onError: (error: any) => {
       toast({ title: "Failed to add course", description: error.message, variant: "destructive" });
@@ -91,6 +120,13 @@ export default function Courses() {
   const handleCreateCourse = (e: React.FormEvent) => {
     e.preventDefault();
     createMutation.mutate(courseForm);
+  };
+
+  const handleGoogleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (googleSearchQuery.trim()) {
+      searchGoogle();
+    }
   };
 
   const filteredCourses = courses?.filter((course) => {
@@ -166,13 +202,101 @@ export default function Courses() {
                   Add Course
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
+              <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Add New Course</DialogTitle>
-                  <DialogDescription>Enter the course details below</DialogDescription>
+                  <DialogTitle>Add Course</DialogTitle>
+                  <DialogDescription>Search Google Maps or enter details manually</DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleCreateCourse} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                
+                <Tabs defaultValue="google" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="google" data-testid="tab-google-search">
+                      <MapPin className="h-4 w-4 mr-2" />
+                      Google Maps
+                    </TabsTrigger>
+                    <TabsTrigger value="manual" data-testid="tab-manual-entry">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Manual Entry
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="google" className="space-y-4">
+                    <form onSubmit={handleGoogleSearch} className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="google-search">Search for golf courses</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="google-search"
+                            value={googleSearchQuery}
+                            onChange={(e) => setGoogleSearchQuery(e.target.value)}
+                            placeholder="e.g., Pebble Beach, golf courses near me"
+                            data-testid="input-google-search"
+                          />
+                          <Button type="submit" disabled={googleLoading} data-testid="button-search-google">
+                            {googleLoading ? "Searching..." : "Search"}
+                          </Button>
+                        </div>
+                      </div>
+                    </form>
+
+                    {googleLoading && (
+                      <div className="space-y-3">
+                        {[1, 2, 3].map((i) => (
+                          <Skeleton key={i} className="h-24 w-full" />
+                        ))}
+                      </div>
+                    )}
+
+                    {googleResults && googleResults.length > 0 && (
+                      <div className="space-y-3">
+                        {googleResults.map((place) => (
+                          <Card key={place.googlePlaceId} className="hover-elevate" data-testid={`card-google-result-${place.googlePlaceId}`}>
+                            <CardHeader className="pb-3">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1">
+                                  <CardTitle className="text-base">{place.name}</CardTitle>
+                                  <CardDescription className="mt-1">
+                                    <MapPin className="h-3 w-3 inline mr-1" />
+                                    {place.address}
+                                  </CardDescription>
+                                  {place.rating && (
+                                    <div className="flex items-center gap-1 mt-2">
+                                      <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                                      <span className="text-sm font-medium">{place.rating}</span>
+                                      {place.userRatingsTotal && (
+                                        <span className="text-xs text-muted-foreground">
+                                          ({place.userRatingsTotal} reviews)
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                                <Button
+                                  size="sm"
+                                  onClick={() => addFromGoogleMutation.mutate(place)}
+                                  disabled={addFromGoogleMutation.isPending}
+                                  data-testid={`button-add-google-${place.googlePlaceId}`}
+                                >
+                                  <Plus className="h-4 w-4 mr-1" />
+                                  Add
+                                </Button>
+                              </div>
+                            </CardHeader>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+
+                    {googleResults && googleResults.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground">
+                        No results found. Try a different search term.
+                      </div>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="manual">
+                    <form onSubmit={handleCreateCourse} className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
                     <div className="col-span-2 space-y-2">
                       <Label htmlFor="name">Course Name*</Label>
                       <Input
@@ -225,16 +349,18 @@ export default function Courses() {
                         data-testid="input-fee-note"
                       />
                     </div>
-                  </div>
-                  <div className="flex justify-end gap-2 pt-4">
-                    <Button type="button" variant="outline" onClick={() => setNewCourseOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={createMutation.isPending} data-testid="button-submit-course">
-                      {createMutation.isPending ? "Adding..." : "Add Course"}
-                    </Button>
-                  </div>
-                </form>
+                      </div>
+                      <div className="flex justify-end gap-2 pt-4">
+                        <Button type="button" variant="outline" onClick={() => setNewCourseOpen(false)}>
+                          Cancel
+                        </Button>
+                        <Button type="submit" disabled={createMutation.isPending} data-testid="button-submit-course">
+                          {createMutation.isPending ? "Adding..." : "Add Course"}
+                        </Button>
+                      </div>
+                    </form>
+                  </TabsContent>
+                </Tabs>
               </DialogContent>
             </Dialog>
           </div>
