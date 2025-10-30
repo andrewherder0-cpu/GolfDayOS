@@ -1,0 +1,113 @@
+# Golf Day OS
+
+A production-ready golf event management system built with Express.js, React, and TypeScript.
+
+## Overview
+
+Golf Day OS helps groups organize golf events with a complete workflow: draft creation → course/date polling → RSVP management → pairing organization → tee sheet export.
+
+## Recent Changes
+
+- **October 30, 2025**: Critical authentication optimization
+  - Implemented AuthProvider context to centralize authentication state
+  - Fixed duplicate /api/auth/me queries (was hammering backend, now single call)
+  - All pages now use useAuthContext() instead of direct useAuth() calls
+  - Significantly improved app performance and reduced server load
+
+- **2024**: Initial MVP implementation
+  - Complete user authentication system with email/password
+  - Group management with join codes
+  - Course directory with search and CSV import
+  - Event lifecycle management (draft → polling → RSVP → final)
+  - Polling system for course and date selection
+  - RSVP management with capacity limits and waitlists
+  - Pairing management with PDF/CSV export
+  - Activity logging throughout the system
+
+## Architecture
+
+### Frontend (React + TypeScript)
+- **Pages**: Login, Dashboard, Groups, Courses, Events, Polls, RSVP, Pairings, Settings
+- **State Management**: TanStack Query for server state, AuthProvider context for auth
+- **UI Components**: Shadcn UI with Tailwind CSS
+- **Design System**: Modern SaaS productivity (Linear/Notion inspired)
+- **Routing**: Wouter for client-side routing
+- **Authentication**: Centralized via AuthProvider context (client/src/lib/AuthProvider.tsx)
+
+### Backend (Express.js + TypeScript)
+- **Storage**: In-memory storage (MemStorage) - upgradeable to PostgreSQL
+- **Authentication**: Session-based with HTTP-only cookies, bcrypt password hashing
+- **API Routes**:
+  - `/api/auth` - signup, login, logout, user management
+  - `/api/groups` - create, invite, join, list groups
+  - `/api/courses` - search, create, update, CSV import
+  - `/api/events` - full event lifecycle management
+  - `/api/polls` - voting, closing, applying results
+  - `/api/rsvps` - join, withdraw, claim waitlist spots
+  - `/api/pairings` - create/manage groups, export tee sheets
+
+### Data Model
+- **User**: email, name, phone, password hash
+- **Group**: name, join code, owner
+- **Membership**: user-group relationships with roles
+- **Course**: name, location, tags, fees, website
+- **Event**: title, state, capacity, chosen course/date
+- **Poll**: type (course/date), options, votes
+- **RSVP**: status (joined/waitlisted/withdrawn), position
+- **Pairing**: groups of players with tee times
+- **ActivityLog**: event audit trail
+
+## User Preferences
+
+None specified yet.
+
+## Technical Stack
+
+- **Runtime**: Node.js 20
+- **Frontend**: React 18, TypeScript, Vite
+- **Backend**: Express.js, TypeScript
+- **Styling**: Tailwind CSS, Shadcn UI components
+- **Fonts**: Inter (primary), JetBrains Mono (code/join codes)
+- **State**: TanStack Query v5
+- **Validation**: Zod schemas
+- **Storage**: In-memory (MemStorage) - ready for PostgreSQL migration
+
+## Development
+
+```bash
+# Install dependencies (handled automatically)
+npm install
+
+# Start development server (frontend + backend)
+npm run dev
+```
+
+The application runs on port 5000 with both frontend and backend served together.
+
+## Key Features
+
+1. **Authentication**: Email/password with secure sessions
+2. **Groups**: Create groups, generate join codes, invite members
+3. **Courses**: Searchable directory, CSV import, tags/filters
+4. **Events**: Multi-stage workflow (draft → polling → RSVP → final)
+5. **Polling**: Vote on courses and dates, tie-break handling
+6. **RSVP**: Capacity management, automatic waitlist, 24h claim windows
+7. **Pairings**: Manual group creation, tee time assignment, member ordering
+8. **Export**: PDF tee sheets, CSV rosters
+9. **Notifications**: Console-based email stubs (ready for real email integration)
+
+## Business Rules
+
+- **Polls**: One vote per user per poll, live tallies, owner can close and apply results
+- **RSVP**: Auto-waitlist when capacity reached, withdraw triggers waitlist promotion
+- **Waitlist Claims**: 24-hour window to claim promoted spots
+- **Event States**: draft → polling → rsvp → final → closed
+
+## Future Enhancements
+
+- PostgreSQL database integration
+- Real email notifications (SendGrid/similar)
+- ICS calendar downloads
+- Bulk nudge for non-voters/non-RSVPs
+- Scoring and handicap tracking
+- Payment integration
