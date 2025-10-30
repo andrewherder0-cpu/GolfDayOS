@@ -1,0 +1,352 @@
+You are scaffolding a production-ready FastAPI + SQLite + React (Vite + Tailwind) app called Golf Day OS. Build only what’s specified. Prioritize clarity, small files, and testability.
+
+0) Goals (MVP)
+
+Private groups with minimal auth (email+password, sessions).
+
+Course directory (local DB) with search + CSV import.
+
+Event creation → course/date polls → apply result → open RSVP with cap + waitlist.
+
+Manual pairings + tee sheet PDF export and CSV export.
+
+Email notifications via console (stub function) for now.
+
+No payments, no scoring.
+
+1) Project Structure
+
+Create a monorepo layout:
+
+golf-day-os/
+  backend/
+    app/
+      __init__.py
+      main.py
+      db.py
+      deps.py
+      security.py
+      emailer.py
+      models.py
+      schemas.py
+      activity.py
+      utils/pdf.py
+      routers/
+        auth.py
+        groups.py
+        courses.py
+        events.py
+        polls.py
+        rsvps.py
+        pairings.py
+    tests/
+      test_auth.py
+      test_polls_rsvp.py
+    requirements.txt
+    .env.example
+  frontend/
+    index.html
+    vite.config.ts
+    src/
+      main.tsx
+      App.tsx
+      lib/api.ts
+      lib/useAuth.ts
+      components/
+        Nav.tsx
+        Table.tsx
+      pages/
+        Login.tsx
+        Dashboard.tsx
+        GroupHome.tsx
+        Courses.tsx
+        EventDraft.tsx
+        PollView.tsx
+        RSVPPage.tsx
+        Pairings.tsx
+        Settings.tsx
+      styles/index.css
+    package.json
+    tsconfig.json
+    postcss.config.cjs
+    tailwind.config.cjs
+  scripts/
+    seed_courses.py
+    sample_courses.csv
+  README.md
+
+2) Backend (FastAPI)
+2.1 Requirements
+
+requirements.txt:
+
+fastapi==0.115.0
+uvicorn==0.30.6
+sqlmodel==0.0.22
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.9
+itsdangerous==2.2.0
+reportlab==4.2.2
+Jinja2==3.1.4
+
+2.2 DB & Models (SQLite + SQLModel)
+
+db.py: engine/session helpers; create_all.
+
+models.py: SQLModel models:
+
+Entities & key fields:
+
+User(id, email unique, password_hash, name, phone, created_at)
+
+Group(id, name, join_code, owner_id → FK User)
+
+Membership(id, user_id FK, group_id FK, role enum: owner|member, unique(user,group))
+
+Course(id, name, city, region, lat, lng, tags JSON, fee_note, website, is_active)
+
+Event(id, group_id FK, title, state enum: draft|polling|rsvp|final|closed, capacity int, notes, chosen_course_id FK, chosen_date date nullable, created_by FK, deadlines_json)
+
+Poll(id, event_id FK, type enum: course|date, closes_at, visibility enum: live|hidden)
+
+PollOption(id, poll_id FK, label, course_id FK nullable, date_option date nullable)
+
+Vote(id, poll_id FK, option_id FK, user_id FK, unique(poll_id,user_id))
+
+RSVP(id, event_id FK, user_id FK, status enum: joined|waitlisted|withdrawn, position_int, claimed_expires_at)
+
+Pairing(id, event_id FK, name, tee_time_text)
+
+PairingMember(id, pairing_id FK, user_id FK, order_int)
+
+ActivityLog(id, event_id FK, actor_id FK, action, payload_json, created_at)
+
+2.3 Security
+
+Session cookies (HTTP-only) using signed cookie (itsdangerous).
+
+Password hashing with passlib bcrypt.
+
+Dependency get_current_user() based on session cookie.
+
+CSRF token via header X-CSRF-Token on mutating requests (simple random token stored in session).
+
+2.4 Routers (only endpoints listed)
+
+Implement basic Pydantic schemas in schemas.py.
+
+/auth
+
+POST /signup (email, name, password)
+
+POST /login
+
+POST /logout
+
+GET /me
+
+/groups
+
+POST / create (owner=me)
+
+POST /{id}/invite -> returns join_code
+
+POST /join/{join_code}
+
+GET /mine (groups I belong to)
+
+GET /{id} (members, events)
+
+/courses
+
+GET / search params: q, city, region, tag
+
+POST / (admin of any group can create)
+
+PUT /{id}
+
+POST /import (CSV upload; columns: name,city,region,lat,lng,tags,fee_note,website)
+
+/events
+
+POST / (draft) {group_id, title, capacity, notes}
+
+PATCH /{id} (update draft)
+
+POST /{id}/polls/open -> creates course or date polls
+
+POST /{id}/rsvp/open -> set state=rsvp
+
+POST /{id}/finalize -> state=final
+
+GET /{id} (full event view)
+
+/polls
+
+GET /event/{event_id}
+
+POST /{poll_id}/vote
+
+POST /{poll_id}/close
+
+POST /{poll_id}/apply-result
+
+If course poll → set event.chosen_course_id
+
+If date poll → set event.chosen_date
+
+Then transition event state (to rsvp if both chosen)
+
+/rsvps
+
+POST /event/{event_id}/join
+
+POST /event/{event_id}/withdraw
+
+POST /event/{event_id}/claim (for waitlist; requires valid claim window)
+
+GET /event/{event_id}/roster
+
+/pairings
+
+GET /event/{event_id}
+
+POST /event/{event_id} (create/update groups with tee_time_text)
+
+POST /{pairing_id}/members (set order)
+
+GET /event/{event_id}/export/tee-sheet.pdf
+
+GET /event/{event_id}/export/roster.csv
+
+2.5 Business Rules (implement)
+
+Poll voting: 1 vote per user per poll; allow live tally return.
+
+Apply result tie-break: if top options tie, require owner to choose (provide endpoint param).
+
+RSVP:
+
+If joined count < capacity → status=joined.
+
+Else create waitlist entry with position_int = max + 1.
+
+On withdraw: promote waitlist #1 → create claimed_expires_at = now + 24h.
+
+/claim checks expiry windows and promotes next if expired.
+
+2.6 Emailer
+
+emailer.py with send_email(to, subject, body) that logs to console (stub).
+Add helper calls for: poll opened, poll closing soon, RSVP opened, spot available, roster locked, tee sheet posted.
+
+2.7 PDF Export
+
+utils/pdf.py using reportlab to render a clean tee sheet: Event title, date, course, foursomes (name + tee time).
+
+2.8 App Init
+
+main.py: mount routers, configure CORS for http://localhost:5173, set up session middleware, create tables on startup.
+
+2.9 Tests (minimal)
+
+tests/test_auth.py: signup/login/logout flow.
+
+tests/test_polls_rsvp.py: create group/event → open polls → vote → apply → open RSVP → join until cap → waitlist logic → withdraw → claim.
+
+2.10 Env
+
+.env.example with SECRET_KEY=change-me, SESSION_COOKIE_NAME=golfday_session.
+
+3) Frontend (Vite React + Tailwind, TypeScript)
+3.1 Setup
+
+Tailwind configured; basic neutral styles.
+
+lib/api.ts wraps fetch with base URL, credentials, and CSRF header.
+
+lib/useAuth.ts provides user, login, logout, signup.
+
+3.2 Pages (Functional)
+
+Login/Signup: simple forms.
+
+Dashboard: list my groups + upcoming events, CTA: New Group / New Event.
+
+GroupHome: members list, events list, “Invite link”.
+
+Courses: search/filter list; admin “Add” and “Import CSV”.
+
+EventDraft: set capacity, add candidate courses & date options, open polls.
+
+PollView: vote + countdown; owner Close & Apply buttons with tie-break flow.
+
+RSVPPage: join/withdraw; shows cap, your status (joined/waitlisted) and position.
+
+Pairings: drag-drop (simplify using basic up/down buttons if needed), tee time fields, export PDF/CSV.
+
+Settings: profile edit.
+
+Use a plain, clean UI. No component libraries beyond Tailwind.
+
+3.3 Navigation
+
+Top nav shows: Dashboard, Courses, Settings; context-aware breadcrumbs for Group/Event.
+
+3.4 State
+
+Use minimal local state + server fetch; no global state library. Refetch on mutations.
+
+4) Seed & Run
+4.1 Sample Courses
+
+Create scripts/sample_courses.csv with headers:
+
+name,city,region,lat,lng,tags,fee_note,website
+TPC Toronto at Osprey Valley,Caledon,ON,43.805,-79.906,"[\"tournament-friendly\",\"cart-optional\"]","Varies by course and time",https://ospreyvalley.com
+TPC Toronto - North,Caledon,ON,43.806,-79.905,"[\"tournament-friendly\"]","",https://ospreyvalley.com
+Angus Glen - South,Markham,ON,43.895,-79.312,"[\"cart-mandatory\"]","Tournament packages available",https://angusglen.com
+Eagles Nest,Maple,ON,43.872,-79.544,"[\"tournament-friendly\"]","Premium rates",https://www.eaglesnestgolf.com
+
+
+scripts/seed_courses.py reads CSV and inserts into DB.
+
+4.2 Dev Scripts
+
+Backend: uvicorn app.main:app --reload --port 8000
+
+Frontend: npm run dev (Vite on 5173)
+
+5) Acceptance Criteria (must pass)
+
+✅ Create account → create group → invite link → second user joins.
+
+✅ Import sample courses; they appear in Courses with search working.
+
+✅ Create event (draft) → create course poll & date poll → users vote → owner close & apply → event moves to RSVP once both chosen.
+
+✅ Users can Join until capacity; 17th becomes waitlisted with visible position.
+
+✅ Withdraw of a joined player triggers waitlist promotion and “Claim spot” with 24h expiry.
+
+✅ Owner can create simple Pairings, set tee times, and export a PDF tee sheet.
+
+✅ Basic email notifications log to server console on key actions.
+
+6) Nice-to-have (do NOT block MVP)
+
+ICS download on RSVP confirmation.
+
+“Nudge non-voters / non-RSVPs” bulk button.
+
+7) Quality Bar
+
+Type-annotated Python; Pydantic models for I/O.
+
+Clear 4xx/5xx errors; backend logs concise actions (ActivityLog entries).
+
+Frontend handles auth state & 401s (redirect to Login).
+
+Keep files small and readable.
+
+Build this exactly as specified. When done, print concise instructions in README for running backend & frontend, and a quick demo flow (two users, one event).
