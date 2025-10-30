@@ -8,6 +8,16 @@ Golf Day OS helps groups organize golf events with a complete workflow: draft cr
 
 ## Recent Changes
 
+- **October 30, 2025**: Google Maps Places API Integration
+  - Added backend endpoint GET /api/courses/search-google for searching golf courses
+  - Added backend endpoint POST /api/courses/add-from-google for adding courses from results
+  - Updated Courses page with tabbed dialog (Google Maps + Manual Entry)
+  - Google Maps search: enter query → displays results → click Add → saved to database
+  - Auto-tags courses with 'google-maps', extracts city/region from formatted address
+  - Secures API key server-side (never exposed to frontend)
+  - Architect reviewed and approved (PASS verdict)
+  - Requires valid Google API key with Places API enabled and billing configured
+
 - **October 30, 2025**: Production-ready PostgreSQL database migration
   - Migrated from in-memory storage to PostgreSQL with Drizzle ORM
   - Created complete database schema with 12 tables and proper relations
