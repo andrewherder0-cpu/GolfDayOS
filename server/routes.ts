@@ -321,6 +321,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/courses/search-google", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { query } = req.query;
+      
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({ error: "Search query required" });
+      }
+
+      const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ error: "Google Maps API key not configured" });
+      }
+
+      const searchQuery = `golf course ${query}`;
+      const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${apiKey}`;
+
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+        console.error('Google Maps API error:', data);
+        return res.status(500).json({ error: `Google Maps API error: ${data.status}` });
+      }
+
+      const results = (data.results || []).map((place: any) => ({
+        googlePlaceId: place.place_id,
+        name: place.name,
+        address: place.formatted_address,
+        lat: place.geometry.location.lat,
+        lng: place.geometry.location.lng,
+        rating: place.rating,
+        userRatingsTotal: place.user_ratings_total,
+      }));
+
+      res.json(results);
+    } catch (error: any) {
+      console.error('Google Maps search error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/courses/add-from-google", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { googlePlaceId, name, address, lat, lng } = req.body;
+
+      if (!googlePlaceId || !name || !address) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      const addressParts = address.split(',').map((s: string) => s.trim());
+      const city = addressParts[addressParts.length - 3] || 'Unknown';
+      const region = addressParts[addressParts.length - 2]?.split(' ')[0] || 'Unknown';
+
+      const course = await storage.createCourse({
+        name,
+        city,
+        region,
+        lat,
+        lng,
+        tags: ['google-maps'],
+        feeNote: undefined,
+        website: undefined,
+        isActive: true,
+      });
+
+      res.json(course);
+    } catch (error: any) {
+      console.error('Add course from Google error:', error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   // ===== EVENT ROUTES =====
   app.post("/api/events", requireAuth, async (req: Request, res: Response) => {
     try {
