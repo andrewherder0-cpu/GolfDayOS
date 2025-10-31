@@ -4,7 +4,9 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuthContext } from "./lib/AuthProvider";
+import Home from "@/pages/Home";
 import Login from "@/pages/Login";
+import Signup from "@/pages/Signup";
 import Dashboard from "@/pages/Dashboard";
 import GroupNew from "@/pages/GroupNew";
 import GroupDetails from "@/pages/GroupDetails";
@@ -22,7 +24,7 @@ function ProtectedRoute({ component: Component, ...rest }: any) {
   const { user } = useAuthContext();
 
   if (!user) {
-    return <Redirect to="/" />;
+    return <Redirect to="/login" />;
   }
 
   return <Component {...rest} />;
@@ -41,9 +43,12 @@ function Router() {
 
   return (
     <Switch>
-      <Route path="/">
-        {user ? <Redirect to="/dashboard" /> : <Login />}
-      </Route>
+      {/* Landing page */}
+      <Route path="/" component={Home} />
+      
+      {/* Auth routes */}
+      <Route path="/login" component={Login} />
+      <Route path="/signup" component={Signup} />
       
       {/* Dashboard */}
       <Route path="/dashboard">
