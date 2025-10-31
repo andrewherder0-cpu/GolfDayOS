@@ -11,6 +11,15 @@ import {
   Trophy,
   ArrowRight,
   CheckCircle2,
+  MessageSquare,
+  UserX,
+  ClipboardList,
+  Shuffle,
+  Clock,
+  UserCheck,
+  Share2,
+  Flag,
+  Sparkles,
 } from "lucide-react";
 import { NavBar } from "@/components/landing/NavBar";
 import { Footer } from "@/components/landing/Footer";
@@ -28,21 +37,77 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Floating Decorative Elements */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <motion.div
+          animate={{
+            y: [0, -20, 0],
+            rotate: [0, 5, 0],
+          }}
+          transition={{
+            duration: 8,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+          className="absolute top-40 right-10 opacity-10"
+        >
+          <Flag className="w-24 h-24 text-brand-600" />
+        </motion.div>
+        <motion.div
+          animate={{
+            y: [0, 20, 0],
+            x: [0, -10, 0],
+          }}
+          transition={{
+            duration: 10,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+          className="absolute top-[30%] left-20 opacity-10"
+        >
+          <Trophy className="w-20 h-20 text-brand-500" />
+        </motion.div>
+        <motion.div
+          animate={{
+            y: [0, -15, 0],
+            scale: [1, 1.1, 1],
+          }}
+          transition={{
+            duration: 7,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+          className="absolute bottom-40 right-32 opacity-10"
+        >
+          <Sparkles className="w-16 h-16 text-brand-400" />
+        </motion.div>
+      </div>
+      
       <NavBar />
 
       {/* Hero Section */}
       <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
-        {/* Background Image */}
+        {/* Animated Gradient Background */}
         <div className="absolute inset-0 z-0">
-          <img
-            src="https://images.unsplash.com/photo-1559599101-bf3be8f9e4f6?q=80&w=1800&auto=format&fit=crop"
-            alt="Friends golfing"
-            className="w-full h-full object-cover"
-            loading="eager"
+          <motion.div
+            animate={{
+              background: [
+                "linear-gradient(135deg, #14532d 0%, #15803d 50%, #ca8a04 100%)",
+                "linear-gradient(135deg, #15803d 0%, #ca8a04 50%, #14532d 100%)",
+                "linear-gradient(135deg, #ca8a04 0%, #14532d 50%, #15803d 100%)",
+                "linear-gradient(135deg, #14532d 0%, #15803d 50%, #ca8a04 100%)",
+              ],
+            }}
+            transition={{
+              duration: 10,
+              repeat: Infinity,
+              ease: "linear",
+            }}
+            className="w-full h-full"
           />
-          {/* Dark overlay gradient for text readability */}
-          <div className="absolute inset-0 bg-gradient-to-br from-slate-900/80 via-slate-900/70 to-brand-600/60" />
+          {/* Overlay for depth */}
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-900/60 via-slate-900/40 to-transparent" />
         </div>
 
         {/* Hero Content */}
@@ -110,10 +175,10 @@ export default function Home() {
               className="hidden md:block"
             >
               <img
-                src="https://images.unsplash.com/photo-1581224463319-4f3a62f4f6a4?q=80&w=1400&auto=format&fit=crop"
-                alt="Golf Day OS app mockup"
-                className="rounded-md shadow-2xl border border-white/20"
-                loading="lazy"
+                src="/attached_assets/generated_images/Golf_Day_OS_dashboard_mockup_b5bebc8b.png"
+                alt="Golf Day OS dashboard showing groups, events, and RSVP management"
+                className="rounded-lg shadow-2xl border-2 border-white/30 hover:shadow-brand-500/20 hover:scale-105 transition-all duration-300"
+                loading="eager"
               />
             </motion.div>
           </div>
@@ -177,26 +242,74 @@ export default function Home() {
           </motion.div>
 
           <div className="grid md:grid-cols-2 gap-6">
-            <PainPointCard
-              title="Endless DMs & polls"
-              description="Date/course decisions scattered across chats."
-              delay={0}
-            />
-            <PainPointCard
-              title="Commitment roulette"
-              description="18 spots, 23 'I'm in' messages, 7 pay late."
-              delay={0.1}
-            />
-            <PainPointCard
-              title="Manual waitlists"
-              description="Drops and replacements tracked in someone's Notes app."
-              delay={0.2}
-            />
-            <PainPointCard
-              title="Tee-sheet spaghetti"
-              description="Pairings change five times; nobody has the final version."
-              delay={0.3}
-            />
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0 }}
+              className="p-6 bg-white dark:bg-card rounded-lg border border-border hover-elevate"
+            >
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-12 h-12 bg-red-100 dark:bg-red-900/20 rounded-lg flex items-center justify-center">
+                  <MessageSquare className="w-6 h-6 text-red-600 dark:text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold mb-2">Endless DMs & polls</h3>
+                  <p className="text-muted-foreground">Date/course decisions scattered across chats.</p>
+                </div>
+              </div>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="p-6 bg-white dark:bg-card rounded-lg border border-border hover-elevate"
+            >
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-12 h-12 bg-orange-100 dark:bg-orange-900/20 rounded-lg flex items-center justify-center">
+                  <UserX className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold mb-2">Commitment roulette</h3>
+                  <p className="text-muted-foreground">18 spots, 23 'I'm in' messages, 7 pay late.</p>
+                </div>
+              </div>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="p-6 bg-white dark:bg-card rounded-lg border border-border hover-elevate"
+            >
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-12 h-12 bg-yellow-100 dark:bg-yellow-900/20 rounded-lg flex items-center justify-center">
+                  <ClipboardList className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold mb-2">Manual waitlists</h3>
+                  <p className="text-muted-foreground">Drops and replacements tracked in someone's Notes app.</p>
+                </div>
+              </div>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+              className="p-6 bg-white dark:bg-card rounded-lg border border-border hover-elevate"
+            >
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-12 h-12 bg-red-100 dark:bg-red-900/20 rounded-lg flex items-center justify-center">
+                  <Shuffle className="w-6 h-6 text-red-600 dark:text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold mb-2">Tee-sheet spaghetti</h3>
+                  <p className="text-muted-foreground">Pairings change five times; nobody has the final version.</p>
+                </div>
+              </div>
+            </motion.div>
           </div>
         </div>
       </section>
@@ -284,43 +397,53 @@ export default function Home() {
             </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-3 gap-12 mb-12">
-            {[
-              {
-                number: "01",
-                title: "Create your event",
-                description: "Add capacity, candidate courses and dates.",
-              },
-              {
-                number: "02",
-                title: "Run the votes",
-                description: "Close polls; apply course & date with one click.",
-              },
-              {
-                number: "03",
-                title: "Open RSVP",
-                description:
-                  "Cap fills automatically; waitlist claims open as spots free.",
-              },
-            ].map((step, index) => (
-              <motion.div
-                key={step.number}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: index * 0.2 }}
-                className="text-center"
-                data-testid={`card-step-${index + 1}`}
-              >
-                <div className="w-16 h-16 bg-brand-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <span className="text-2xl font-bold text-brand-600">
-                    {step.number}
+          <div className="relative">
+            {/* Connecting Line */}
+            <div className="hidden md:block absolute top-24 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-brand-500/30 to-transparent" />
+            
+            <div className="grid md:grid-cols-3 gap-12 mb-12 relative">
+              {[
+                {
+                  number: "01",
+                  icon: Calendar,
+                  title: "Create your event",
+                  description: "Add capacity, candidate courses and dates.",
+                },
+                {
+                  number: "02",
+                  icon: Vote,
+                  title: "Run the votes",
+                  description: "Close polls; apply course & date with one click.",
+                },
+                {
+                  number: "03",
+                  icon: UserCheck,
+                  title: "Open RSVP",
+                  description:
+                    "Cap fills automatically; waitlist claims open as spots free.",
+                },
+              ].map((step, index) => (
+                <motion.div
+                  key={step.number}
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.6, delay: index * 0.2 }}
+                  className="text-center relative"
+                  data-testid={`card-step-${index + 1}`}
+                >
+                  <div className="w-20 h-20 bg-gradient-to-br from-brand-500 to-brand-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg border-4 border-white dark:border-background relative z-10">
+                    <step.icon className="w-10 h-10 text-white" />
+                  </div>
+                  <div className="absolute top-7 left-1/2 transform -translate-x-1/2 w-10 h-10 bg-brand-500/10 rounded-full blur-xl -z-10" />
+                  <span className="inline-block px-3 py-1 bg-brand-500/10 text-brand-600 dark:text-brand-400 text-sm font-bold rounded-full mb-3">
+                    STEP {step.number}
                   </span>
-                </div>
-                <h3 className="text-xl font-semibold mb-3">{step.title}</h3>
-                <p className="text-muted-foreground">{step.description}</p>
-              </motion.div>
-            ))}
+                  <h3 className="text-xl font-semibold mb-3">{step.title}</h3>
+                  <p className="text-muted-foreground">{step.description}</p>
+                </motion.div>
+              ))}
+            </div>
           </div>
 
           <motion.div
@@ -331,9 +454,9 @@ export default function Home() {
             className="text-center"
           >
             <img
-              src="https://images.unsplash.com/photo-1591311630200-1c1d59f8d7b6?q=80&w=1400&auto=format&fit=crop"
-              alt="Event planning illustration"
-              className="rounded-md shadow-lg mx-auto max-w-2xl w-full border border-border"
+              src="/attached_assets/generated_images/Golfers_planning_event_together_7eedba8d.png"
+              alt="Golfers collaboratively planning their golf event"
+              className="rounded-lg shadow-xl mx-auto max-w-2xl w-full border border-border"
               loading="lazy"
             />
           </motion.div>
@@ -366,9 +489,9 @@ export default function Home() {
               transition={{ duration: 0.6 }}
             >
               <img
-                src="https://images.unsplash.com/photo-1502877338535-766e1452684a?q=80&w=1200&auto=format&fit=crop"
-                alt="Tee sheet screenshot"
-                className="rounded-md shadow-lg border border-white/20"
+                src="/attached_assets/generated_images/Golf_pairings_and_scorecard_ba9c5a21.png"
+                alt="Golf pairings and tee sheet organization"
+                className="rounded-lg shadow-xl border-2 border-white/20"
                 loading="lazy"
               />
             </motion.div>
