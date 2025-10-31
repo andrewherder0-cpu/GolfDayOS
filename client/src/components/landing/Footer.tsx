@@ -15,13 +15,13 @@ export function Footer() {
           <div>
             <h4 className="font-semibold mb-4">Quick Links</h4>
             <nav className="flex flex-col gap-2">
-              <a
-                href="#"
-                className="text-white/70 hover:text-white transition-colors"
-                data-testid="link-footer-home"
+              <button
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                className="text-white/70 hover:text-white transition-colors text-left"
+                data-testid="button-footer-home"
               >
                 Home
-              </a>
+              </button>
               <button
                 onClick={() => {
                   const el = document.getElementById("features");

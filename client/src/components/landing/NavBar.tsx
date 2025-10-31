@@ -36,14 +36,14 @@ export function NavBar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <Link href="/">
-            <a
-              className={`text-xl font-bold transition-colors ${
+            <span
+              className={`text-xl font-bold transition-colors cursor-pointer ${
                 isScrolled ? "text-brand-600" : "text-white"
               }`}
               data-testid="link-home"
             >
               Golf Day OS
-            </a>
+            </span>
           </Link>
 
           <div className="hidden md:flex items-center gap-8">
