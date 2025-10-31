@@ -81,6 +81,16 @@ export default {
           busy: "rgb(239 68 68)",
           offline: "rgb(156 163 175)",
         },
+        brand: {
+          600: "hsl(var(--brand-600) / <alpha-value>)",
+          500: "hsl(var(--brand-500) / <alpha-value>)",
+        },
+        sand: {
+          100: "hsl(var(--sand-100) / <alpha-value>)",
+        },
+        slate: {
+          900: "hsl(var(--slate-900) / <alpha-value>)",
+        },
       },
       fontFamily: {
         sans: ["var(--font-sans)"],

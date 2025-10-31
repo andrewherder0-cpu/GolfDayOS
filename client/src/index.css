@@ -83,6 +83,13 @@
   --font-serif: Georgia, serif;
   --font-mono: "JetBrains Mono", Menlo, Monaco, "Courier New", monospace;
   --radius: .5rem; /* 8px */
+  
+  /* Landing page golf-themed colors */
+  --brand-600: 140 72% 20%;
+  --brand-500: 140 85% 35%;
+  --sand-100: 30 10% 96%;
+  --slate-900: 222 47% 11%;
+  
   --shadow-2xs: 0px 1px 2px 0px hsl(220 13% 13% / 0.05);
   --shadow-xs: 0px 1px 3px 0px hsl(220 13% 13% / 0.1);
   --shadow-sm: 0px 1px 2px 0px hsl(220 13% 13% / 0.06), 0px 1px 3px 0px hsl(220 13% 13% / 0.1);
