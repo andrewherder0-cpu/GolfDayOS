@@ -8,6 +8,18 @@ Golf Day OS helps groups organize golf events with a complete workflow: draft cr
 
 ## Recent Changes
 
+- **October 31, 2025**: Landing Page Visual Enhancements
+  - Replaced hero background with animated gradient (green, gold) using Framer Motion
+  - Integrated 3 custom AI-generated images: dashboard mockup, golfers planning, pairings/scorecard
+  - Enhanced Pain Points section with Lucide icons (MessageSquare, UserX, ClipboardList, Shuffle)
+  - Upgraded How It Works section with visual step diagram (circular icon badges, connecting gradient line)
+  - Added floating decorative elements (Flag, Trophy, Sparkles) with subtle animations
+  - All icons sourced from Lucide React for consistent visual hierarchy
+  - Dashboard mockup shows realistic RSVP management interface
+  - Golfers planning scene adds authentic golf event context
+  - All animations optimized with viewport triggers and moderate durations
+  - End-to-end tested and architect approved (PASS verdict)
+
 - **October 31, 2025**: Authentication Flow Refinement
   - Fixed signup/login redirect issues using auth-state-driven navigation
   - Replaced setTimeout with useEffect that reacts to user state changes
