@@ -1,0 +1,191 @@
+You are building a single-page landing page (Home) for the app Golf Day OS using React (Vite) + Tailwind CSS and Framer Motion for tasteful animations.
+
+Objectives
+
+Professional, modern, responsive design.
+
+Hero that clearly states the value: “Run your golf tournaments without the group-chat chaos.”
+
+Visuals: friends golfing + app-in-use mockups (use Unsplash placeholders).
+
+Sections that name the pain and show the solution.
+
+Multiple CTAs to /signup.
+
+Good SEO metadata + OG tags. Accessible components.
+
+Tech & Structure
+
+Stack: React + Vite + Tailwind + Framer Motion.
+
+Single page component: src/pages/Home.tsx and route /.
+
+Shared components in src/components/ (NavBar, Footer, FeatureCard, PainPointCard, TestimonialCard, FAQItem).
+
+Use Tailwind for layout; no external UI library.
+
+Include a simple router (React Router) so CTAs navigate to /signup (stub that route with a placeholder page).
+
+Include a color theme that nods to golf: deep green, sand, slate.
+
+--brand-600: #14532d (deep green)
+
+--brand-500: #16a34a
+
+--sand-100: #f5f5f4
+
+--slate-900: #0f172a
+
+Content (use this copy verbatim where provided)
+Brand & Hero
+
+Title/H1: Golf Day OS
+
+Subhead: The easiest way to organize your spring & fall golf tournaments—poll dates, pick a course, cap RSVPs, manage a waitlist, and publish tee sheets in minutes.
+
+Primary CTA: Get Started — links to /signup
+
+Secondary CTA: See How It Works — scroll to “How it Works”
+
+Hero bullets (3):
+
+End the group-chat chaos
+
+Lock your roster with caps & waitlists
+
+Publish pairings & tee sheets fast
+
+Hero images:
+
+Background/cover: Unsplash “friends golfing”
+https://images.unsplash.com/photo-1559599101-bf3be8f9e4f6?q=80&w=1800&auto=format&fit=crop
+
+Secondary device/mockup (placeholder of app):
+https://images.unsplash.com/photo-1581224463319-4f3a62f4f6a4?q=80&w=1400&auto=format&fit=crop
+
+Social proof (small strip)
+
+“Trusted by weekend captains and league organizers across Ontario.” (Add subtle logos as placeholders: “Your League”, “Weekend Wolves”, “Front Nine Society”)
+
+Pain Points (section: “Why every organizer burns out”)
+
+List as cards with concise copy:
+
+Endless DMs & polls — Date/course decisions scattered across chats.
+
+Commitment roulette — 18 spots, 23 “I’m in” messages, 7 pay late.
+
+Manual waitlists — Drops and replacements tracked in someone’s Notes app.
+
+Tee-sheet spaghetti — Pairings change five times; nobody has the final version.
+
+The Solution (section: “What Golf Day OS fixes”)
+
+Grid of features with icons:
+
+Smart Polling: Course & date polls with clear winners and organizer tie-breaks.
+
+RSVP Caps & Waitlists: First-in join; auto-promote replacements with claim windows.
+
+Roster & Pairings: Drag-and-drop foursomes; tee times; printable tee sheet PDF.
+
+Course Directory: Search local courses you actually play; shortlist in-app.
+
+CTA button under grid: Start free → /signup
+
+How it Works (3 steps)
+
+Create your event — Add capacity, candidate courses and dates.
+
+Run the votes — Close polls; apply course & date with one click.
+
+Open RSVP — Cap fills automatically; waitlist claims open as spots free.
+
+Include a small illustration/placeholder image:
+https://images.unsplash.com/photo-1591311630200-1c1d59f8d7b6?q=80&w=1400&auto=format&fit=crop
+
+Live on Event Day (mini band)
+
+“Check in players, finalize pairings, and export a clean tee sheet.”
+Add small screenshot placeholder:
+https://images.unsplash.com/photo-1502877338535-766e1452684a?q=80&w=1200&auto=format&fit=crop
+
+Testimonials
+
+Two short quotes:
+
+“Our 20-player fall classic finally ran on time. No-shows were replaced automatically.” — Mike H., Captain
+
+“I stopped chasing people. The app handled the waitlist and tee sheet.” — Aisha K., Organizer
+
+FAQ
+
+Include collapsible items:
+
+Do you handle payments? V1 focuses on logistics (polls, caps, waitlists, tee sheets). Payments are coming soon.
+
+Can I book courses through the app? We centralize decision-making and logistics first. Direct booking with partner courses is planned.
+
+Is there live scoring? Not yet. Priorities: commitment and logistics.
+
+Is it free? Organize your first events free. Pro features coming soon.
+
+Final CTA banner
+
+Headline: Ready to run your next tournament the easy way?
+
+Button: Get Started — /signup
+
+Footer
+
+Links: Home, Features, How it Works, FAQ, Contact (mailto placeholder hello@golfdayos.app)
+
+Copyright: © {currentYear} Golf Day OS. All rights reserved.
+
+Design & Interaction Requirements
+
+Sticky top nav with transparent → solid on scroll.
+
+Smooth scroll for in-page anchors.
+
+Framer Motion on hero text, cards on hover, and section entrances (subtle).
+
+Accessible: semantic landmarks, alt text, focus states, aria labels.
+
+Mobile-first: stack sections; swap heavy images for smaller sizes on mobile.
+
+Performance: lazy-load non-hero images; use loading="lazy".
+
+SEO & Metadata
+
+Set <title>Golf Day OS — Organize Your Golf Tournaments Without Chaos</title>
+
+Meta description: “Poll dates, pick a course, cap RSVPs, manage waitlists, and publish tee sheets—fast.”
+
+OG image: use the hero Unsplash URL as placeholder.
+
+Favicon: simple golf ball/flag emoji fallback.
+
+File/Code Tasks
+
+Install & configure Tailwind + Framer Motion.
+
+Create minimal router; / (Home) and /signup (stub form with name/email/password & a “Create Account” button).
+
+Build the components and sections exactly as described, with the provided copy and image URLs.
+
+Ensure all CTAs route to /signup.
+
+Add a simple color theme in Tailwind config (brand & sand); apply consistently.
+
+Ship a polished, production-quality layout with clear hierarchy and generous whitespace.
+
+Deliverable
+
+A running Vite React app with the landing page at /, a stub /signup, and all copy/images in place.
+
+Provide quick start steps in README.md: npm i, npm run dev.
+
+Keep the code clean, typed (TypeScript), and organized.
+
+Build this landing page now.
