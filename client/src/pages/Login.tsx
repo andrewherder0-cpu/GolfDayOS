@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { useAuthContext } from "@/lib/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const { login, signup, loginPending, signupPending } = useAuthContext();
+  const { login, signup, loginPending, signupPending, user } = useAuthContext();
   const { toast } = useToast();
   const [isSignup, setIsSignup] = useState(false);
   const [formData, setFormData] = useState({
@@ -18,10 +18,19 @@ export default function Login() {
     name: "",
     phone: "",
   });
+  const justAuthenticated = useRef(false);
+
+  // Redirect to dashboard when user becomes authenticated after login/signup
+  useEffect(() => {
+    if (user && justAuthenticated.current) {
+      setLocation("/dashboard");
+    }
+  }, [user, setLocation]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      justAuthenticated.current = true;
       if (isSignup) {
         await signup({
           email: formData.email,
@@ -34,8 +43,8 @@ export default function Login() {
         await login({ email: formData.email, password: formData.password });
         toast({ title: "Welcome back!" });
       }
-      setLocation("/dashboard");
     } catch (error: any) {
+      justAuthenticated.current = false;
       toast({
         title: isSignup ? "Signup failed" : "Login failed",
         description: error.message || "Please try again",

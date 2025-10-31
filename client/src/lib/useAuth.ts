@@ -10,37 +10,39 @@ export function useAuth() {
     retry: false,
     queryFn: async () => {
       try {
-        return await apiRequest<User>("GET", "/api/auth/me");
+        const res = await apiRequest("GET", "/api/auth/me");
+        return await res.json();
       } catch (error: any) {
-        if (error.status === 401) {
+        if (error.message?.includes("401")) {
           return null;
         }
         throw error;
       }
     },
-    placeholderData: null, // Start with null, preventing initial fetch in protected routes
     staleTime: Infinity, // Never consider data stale  
     gcTime: 1000 * 60 * 60, // Keep in cache for 1 hour
     refetchOnWindowFocus: false,
-    refetchOnMount: false, // Don't refetch on component mount
+    refetchOnMount: true, // Allow initial fetch to check session
     refetchOnReconnect: false, // Don't refetch on reconnect
   });
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: { email: string; password: string }) => {
-      return apiRequest<User>("POST", "/api/auth/login", credentials);
+      const res = await apiRequest("POST", "/api/auth/login", credentials);
+      return await res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+    onSuccess: (user) => {
+      queryClient.setQueryData(["/api/auth/me"], user);
     },
   });
 
   const signupMutation = useMutation({
     mutationFn: async (data: InsertUser) => {
-      return apiRequest<User>("POST", "/api/auth/signup", data);
+      const res = await apiRequest("POST", "/api/auth/signup", data);
+      return await res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+    onSuccess: (user) => {
+      queryClient.setQueryData(["/api/auth/me"], user);
     },
   });
 

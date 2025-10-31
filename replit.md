@@ -8,6 +8,16 @@ Golf Day OS helps groups organize golf events with a complete workflow: draft cr
 
 ## Recent Changes
 
+- **October 31, 2025**: Authentication Flow Refinement
+  - Fixed signup/login redirect issues using auth-state-driven navigation
+  - Replaced setTimeout with useEffect that reacts to user state changes
+  - Enabled session persistence across page refreshes (refetchOnMount: true)
+  - Auth flow: signup/login → user set in cache → useEffect fires → navigate to dashboard
+  - Session validated on page load via GET /api/auth/me with session cookie
+  - Eliminated race conditions in redirect logic
+  - End-to-end tested: signup, login, logout, session persistence all working
+  - Architect reviewed and approved (PASS verdict with improvements implemented)
+
 - **October 31, 2025**: Professional Landing Page
   - Built single-page landing with React, Tailwind CSS, and Framer Motion
   - Comprehensive sections: Hero, Pain Points, Solution/Features, How It Works, Testimonials, FAQ, Final CTA

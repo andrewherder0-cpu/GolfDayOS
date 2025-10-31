@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuthContext } from "@/lib/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function Signup() {
   const [, setLocation] = useLocation();
-  const { signup, signupPending } = useAuthContext();
+  const { signup, signupPending, user } = useAuthContext();
   const { toast } = useToast();
   const [formData, setFormData] = useState({
     email: "",
@@ -23,10 +23,19 @@ export default function Signup() {
     name: "",
     phone: "",
   });
+  const justSignedUp = useRef(false);
+
+  // Redirect to dashboard when user becomes authenticated after signup
+  useEffect(() => {
+    if (user && justSignedUp.current) {
+      setLocation("/dashboard");
+    }
+  }, [user, setLocation]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      justSignedUp.current = true;
       await signup({
         email: formData.email,
         password: formData.password,
@@ -34,8 +43,8 @@ export default function Signup() {
         phone: formData.phone || undefined,
       });
       toast({ title: "Account created successfully!" });
-      setLocation("/dashboard");
     } catch (error: any) {
+      justSignedUp.current = false;
       toast({
         title: "Signup failed",
         description: error.message || "Please try again",
