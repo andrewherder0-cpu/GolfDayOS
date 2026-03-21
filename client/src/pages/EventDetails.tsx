@@ -21,9 +21,10 @@ import { useAuthContext } from "@/lib/AuthProvider";
 import { apiRequest } from "@/lib/queryClient";
 import {
   Calendar, MapPin, Users, Vote, CheckCircle2, MessageSquare, Map,
-  ClipboardList, Settings, UserCog, Send, Mail, Crown, Shield,
+  ClipboardList, Settings, UserCog, Send, Mail, Crown, Shield, Clock, XCircle, UserCheck,
 } from "lucide-react";
 import { useState } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { Event, Group, Course, Poll, Rsvp, User, Membership } from "@shared/schema";
 import { ChatView } from "@/components/ChatView";
 import { CourseMapView } from "@/components/CourseMapView";
@@ -125,6 +126,33 @@ export default function EventDetails() {
       queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
       toast({ title: "Event updated!" });
       setEditDialogOpen(false);
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const joinRsvpMutation = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/rsvps/event/${eventId}/join`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
+      toast({ title: "RSVP confirmed!" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const withdrawRsvpMutation = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/rsvps/event/${eventId}/withdraw`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
+      toast({ title: "RSVP withdrawn" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const claimRsvpMutation = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/rsvps/event/${eventId}/claim`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
+      toast({ title: "Spot claimed!" });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -425,39 +453,180 @@ export default function EventDetails() {
 
           {/* RSVP TAB */}
           <TabsContent value="rsvp">
-            {event.state === "rsvp" || event.state === "final" || event.state === "closed" ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle>RSVP Management</CardTitle>
-                  <CardDescription>View and manage attendance for this event</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <CapacityBar current={joinedCount} total={event.capacity} />
-                  <div className="flex gap-4 text-sm text-muted-foreground">
-                    <span>{joinedCount} confirmed</span>
-                    {waitlistedCount > 0 && <span data-testid="text-waitlist-count">{waitlistedCount} on waitlist</span>}
-                  </div>
-                  <Link href={`/events/${eventId}/rsvp`}>
-                    <a>
-                      <Button data-testid="button-go-to-rsvp">
-                        <Users className="h-4 w-4 mr-2" />View Full RSVP List
-                      </Button>
-                    </a>
-                  </Link>
-                  {event.state === "final" && isOrganizer && (
-                    <div className="pt-2">
-                      <Link href={`/events/${eventId}/pairings`}>
-                        <a>
-                          <Button variant="outline" data-testid="button-manage-pairings">
-                            <Users className="h-4 w-4 mr-2" />Manage Pairings
+            {event.state === "rsvp" || event.state === "final" || event.state === "closed" ? (() => {
+              const joinedRsvps = event.rsvps.filter(r => r.status === "joined");
+              const waitlistedRsvps = event.rsvps.filter(r => r.status === "waitlisted");
+              const userRsvp = event.rsvps.find(r => r.userId === user?.id);
+              const canClaim = userRsvp?.status === "waitlisted" && userRsvp.claimedExpiresAt && new Date(userRsvp.claimedExpiresAt) > new Date();
+
+              return (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="lg:col-span-2 space-y-4">
+                    {/* User status + join/withdraw */}
+                    {userRsvp ? (
+                      <Card>
+                        <CardHeader>
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <CardTitle className="text-lg">Your RSVP</CardTitle>
+                            <StatusBadge status={userRsvp.status} />
+                          </div>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          {userRsvp.status === "joined" && (
+                            <>
+                              <Alert>
+                                <CheckCircle2 className="h-4 w-4" />
+                                <AlertDescription data-testid="text-joined-message">
+                                  You're confirmed for this event!
+                                </AlertDescription>
+                              </Alert>
+                              {event.state !== "closed" && (
+                                <Button variant="outline" onClick={() => withdrawRsvpMutation.mutate()}
+                                  disabled={withdrawRsvpMutation.isPending} data-testid="button-withdraw">
+                                  <XCircle className="h-4 w-4 mr-2" />Withdraw
+                                </Button>
+                              )}
+                            </>
+                          )}
+                          {userRsvp.status === "waitlisted" && (
+                            <>
+                              <Alert>
+                                <Clock className="h-4 w-4" />
+                                <AlertDescription data-testid="text-waitlisted-message">
+                                  You're #{userRsvp.positionInt} on the waitlist
+                                  {canClaim && " — A spot is available for you to claim!"}
+                                </AlertDescription>
+                              </Alert>
+                              <div className="flex gap-2 flex-wrap">
+                                {canClaim && (
+                                  <Button onClick={() => claimRsvpMutation.mutate()}
+                                    disabled={claimRsvpMutation.isPending} data-testid="button-claim">
+                                    <CheckCircle2 className="h-4 w-4 mr-2" />Claim Spot
+                                  </Button>
+                                )}
+                                <Button variant="outline" onClick={() => withdrawRsvpMutation.mutate()}
+                                  disabled={withdrawRsvpMutation.isPending} data-testid="button-withdraw-waitlist">
+                                  Leave Waitlist
+                                </Button>
+                              </div>
+                            </>
+                          )}
+                          {userRsvp.status === "withdrawn" && (
+                            <Alert>
+                              <AlertDescription data-testid="text-withdrawn-message">
+                                You've withdrawn. You can rejoin if spots are available.
+                              </AlertDescription>
+                            </Alert>
+                          )}
+                          {userRsvp.status === "withdrawn" && event.state !== "closed" && (
+                            <Button onClick={() => joinRsvpMutation.mutate()}
+                              disabled={joinRsvpMutation.isPending} data-testid="button-join">
+                              {joinRsvpMutation.isPending ? "Joining..." : "Rejoin Event"}
+                            </Button>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg">Join This Event</CardTitle>
+                          <CardDescription>
+                            {joinedRsvps.length < event.capacity
+                              ? "Spots are available!"
+                              : "Join the waitlist to be notified if a spot opens up"}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <Button onClick={() => joinRsvpMutation.mutate()}
+                            disabled={joinRsvpMutation.isPending} data-testid="button-join">
+                            {joinRsvpMutation.isPending ? "Joining..." : "Join Event"}
                           </Button>
-                        </a>
-                      </Link>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ) : (
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Roster */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Users className="h-5 w-5" />Player Roster
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {joinedRsvps.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-medium mb-2">Confirmed ({joinedRsvps.length})</h4>
+                            <div className="space-y-2">
+                              {joinedRsvps.map((rsvp) => (
+                                <div key={rsvp.id} className="flex items-center justify-between py-2 px-3 border rounded-md"
+                                  data-testid={`rsvp-player-${rsvp.userId}`}>
+                                  <div>
+                                    <p className="text-sm font-medium">{rsvp.user?.name}</p>
+                                    <p className="text-xs text-muted-foreground">{rsvp.user?.email}</p>
+                                  </div>
+                                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {waitlistedRsvps.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-medium mb-2">Waitlist ({waitlistedRsvps.length})</h4>
+                            <div className="space-y-2">
+                              {waitlistedRsvps.map((rsvp) => (
+                                <div key={rsvp.id} className="flex items-center justify-between py-2 px-3 border rounded-md bg-muted/30"
+                                  data-testid={`rsvp-waitlist-${rsvp.userId}`}>
+                                  <div>
+                                    <p className="text-sm font-medium">{rsvp.user?.name}</p>
+                                    <p className="text-xs text-muted-foreground">Position #{rsvp.positionInt}</p>
+                                  </div>
+                                  <Clock className="h-4 w-4 text-muted-foreground" />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {joinedRsvps.length === 0 && waitlistedRsvps.length === 0 && (
+                          <p className="text-sm text-muted-foreground">No players have RSVPed yet.</p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <div className="space-y-4">
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base">Attendance</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <CapacityBar current={joinedCount} total={event.capacity} />
+                        <div className="mt-3 space-y-1 text-sm text-muted-foreground">
+                          <div className="flex justify-between"><span>Confirmed</span><span>{joinedCount}</span></div>
+                          {waitlistedCount > 0 && (
+                            <div className="flex justify-between"><span>Waitlisted</span><span data-testid="text-waitlist-count">{waitlistedCount}</span></div>
+                          )}
+                          <div className="flex justify-between"><span>Capacity</span><span>{event.capacity}</span></div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    {event.state === "final" && isOrganizer && (
+                      <Card>
+                        <CardContent className="pt-4">
+                          <Link href={`/events/${eventId}/pairings`}>
+                            <a>
+                              <Button className="w-full" variant="outline" data-testid="button-manage-pairings">
+                                <Users className="h-4 w-4 mr-2" />Manage Pairings
+                              </Button>
+                            </a>
+                          </Link>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                </div>
+              );
+            })() : (
               <Card>
                 <CardContent className="pt-6 text-center">
                   <Users className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
@@ -505,6 +674,11 @@ export default function EventDetails() {
                           {!isCreator && member.role === "organizer" && (
                             <Badge variant="secondary" className="text-xs gap-1">
                               <Shield className="h-3 w-3" />Organizer
+                            </Badge>
+                          )}
+                          {!isCreator && member.role === "member" && (
+                            <Badge variant="outline" className="text-xs gap-1">
+                              <UserCheck className="h-3 w-3" />Member
                             </Badge>
                           )}
                         </div>
@@ -723,6 +897,10 @@ export default function EventDetails() {
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Waitlisted</span>
                         <span className="font-medium">{waitlistedCount}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Withdrawn</span>
+                        <span className="font-medium">{event.rsvps.filter(r => r.status === "withdrawn").length}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Capacity</span>
