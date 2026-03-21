@@ -870,12 +870,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Can only open polls for draft events" });
       }
 
-      const { createCoursePoll, createDatePoll } = req.body;
+      const { createCoursePoll, createDatePoll, coursePollMultiSelect, datePollMultiSelect } = req.body;
 
       if (createCoursePoll) {
         const poll = await storage.createPoll({
           eventId: event.id,
           type: "course",
+          multiSelect: !!coursePollMultiSelect,
           visibility: "live",
         });
 
@@ -892,6 +893,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const poll = await storage.createPoll({
           eventId: event.id,
           type: "date",
+          multiSelect: !!datePollMultiSelect,
           visibility: "live",
         });
 
@@ -1076,7 +1078,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         polls.map(async (poll) => {
           const options = await storage.getPollOptions(poll.id);
           const votes = await storage.getPollVotes(poll.id);
-          const userVote = await storage.getVote(poll.id, req.user!.id);
+          const userVotes = await storage.getUserVotes(poll.id, req.user!.id);
 
           const optionsWithVotes = await Promise.all(
             options.map(async (option) => {
@@ -1086,7 +1088,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             })
           );
 
-          return { ...poll, options: optionsWithVotes, userVote };
+          return { ...poll, options: optionsWithVotes, userVotes };
         })
       );
 
@@ -1111,18 +1113,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Poll not found" });
       }
 
-      // Check if user already voted
-      const existingVote = await storage.getVote(poll.id, req.user!.id);
-      if (existingVote) {
-        return res.status(400).json({ error: "Already voted" });
+      // Accept optionIds array (or legacy single optionId)
+      let optionIds: string[] = req.body.optionIds ?? (req.body.optionId ? [req.body.optionId] : []);
+      if (!optionIds.length) {
+        return res.status(400).json({ error: "No options selected" });
       }
 
-      const { optionId } = req.body;
-      await storage.createVote({
-        pollId: poll.id,
-        optionId,
-        userId: req.user!.id,
-      });
+      if (poll.multiSelect) {
+        // Multi-select: replace the user's entire vote selection
+        await storage.deleteUserPollVotes(poll.id, req.user!.id);
+        for (const optionId of optionIds) {
+          await storage.createVote({ pollId: poll.id, optionId, userId: req.user!.id });
+        }
+      } else {
+        // Single-select: prevent revoting
+        const existingVote = await storage.getVote(poll.id, req.user!.id);
+        if (existingVote) {
+          return res.status(400).json({ error: "Already voted" });
+        }
+        await storage.createVote({ pollId: poll.id, optionId: optionIds[0], userId: req.user!.id });
+      }
 
       await storage.createActivityLog({
         eventId: poll.eventId,

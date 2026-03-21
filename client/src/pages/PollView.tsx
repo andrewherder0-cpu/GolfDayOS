@@ -6,6 +6,7 @@ import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
@@ -13,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthContext } from "@/lib/AuthProvider";
 import { apiRequest } from "@/lib/queryClient";
@@ -21,7 +23,7 @@ import type { Event, Group, Poll, PollOption, Vote as VoteType, Course, Membersh
 
 interface PollWithDetails extends Poll {
   options: (PollOption & { course?: Course; voteCount: number })[];
-  userVote?: VoteType;
+  userVotes: VoteType[];
 }
 
 interface EventWithPolls extends Event {
@@ -36,7 +38,12 @@ export default function PollView() {
   const { user } = useAuthContext();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
+
+  // Single-select: Record<pollId, optionId>
+  const [selectedOption, setSelectedOption] = useState<Record<string, string>>({});
+  // Multi-select: Record<pollId, Set of optionIds>
+  const [selectedMulti, setSelectedMulti] = useState<Record<string, string[]>>({});
+
   const [tiebreakSelection, setTiebreakSelection] = useState<string>("");
   const [newDateInputs, setNewDateInputs] = useState<Record<string, string>>({});
   const [coursePickerOpen, setCoursePickerOpen] = useState<Record<string, boolean>>({});
@@ -54,11 +61,15 @@ export default function PollView() {
   });
 
   const voteMutation = useMutation({
-    mutationFn: ({ pollId, optionId }: { pollId: string; optionId: string }) =>
-      apiRequest("POST", `/api/polls/${pollId}/vote`, { optionId }),
+    mutationFn: ({ pollId, optionIds }: { pollId: string; optionIds: string[] }) =>
+      apiRequest("POST", `/api/polls/${pollId}/vote`, { optionIds }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/polls/event", eventId] });
       toast({ title: "Vote recorded!" });
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Could not submit vote";
+      toast({ title: "Error", description: msg, variant: "destructive" });
     },
   });
 
@@ -137,23 +148,27 @@ export default function PollView() {
     event.membership?.role === "owner" ||
     event.membership?.role === "organizer";
 
-  const handleVote = (pollId: string) => {
-    const optionId = selectedOptions[pollId];
-    if (optionId) {
-      voteMutation.mutate({ pollId, optionId });
+  const toggleMultiOption = (pollId: string, optionId: string) => {
+    setSelectedMulti(prev => {
+      const current = prev[pollId] ?? [];
+      const exists = current.includes(optionId);
+      return {
+        ...prev,
+        [pollId]: exists ? current.filter(id => id !== optionId) : [...current, optionId],
+      };
+    });
+  };
+
+  const handleVote = (poll: PollWithDetails) => {
+    if (poll.multiSelect) {
+      const ids = selectedMulti[poll.id] ?? [];
+      if (!ids.length) return;
+      voteMutation.mutate({ pollId: poll.id, optionIds: ids });
+    } else {
+      const id = selectedOption[poll.id];
+      if (!id) return;
+      voteMutation.mutate({ pollId: poll.id, optionIds: [id] });
     }
-  };
-
-  const handleAddDate = (pollId: string) => {
-    const dateStr = newDateInputs[pollId];
-    if (!dateStr) return;
-    addDateOptionMutation.mutate({ pollId, dateOption: dateStr });
-  };
-
-  const handleAddCourse = (pollId: string) => {
-    const courseId = selectedCourseIds[pollId];
-    if (!courseId) return;
-    addCourseOptionMutation.mutate({ pollId, courseId });
   };
 
   const getTopOptions = (poll: PollWithDetails) => {
@@ -183,16 +198,19 @@ export default function PollView() {
 
         <div className="mt-8 space-y-6">
           {event.polls.map((poll) => {
-            const hasVoted = !!poll.userVote;
+            const hasVoted = poll.userVotes.length > 0;
+            const votedOptionIds = new Set(poll.userVotes.map(v => v.optionId));
             const totalVotes = poll.options.reduce((sum, opt) => sum + opt.voteCount, 0);
             const topOptions = getTopOptions(poll);
             const isTied = topOptions.length > 1 && totalVotes > 0;
             const isDatePoll = poll.type === "date";
 
-            const alreadyAddedCourseIds = new Set(
-              poll.options.map(o => o.courseId).filter(Boolean)
-            );
+            const alreadyAddedCourseIds = new Set(poll.options.map(o => o.courseId).filter(Boolean));
             const availableCourses = allCourses.filter(c => !alreadyAddedCourseIds.has(c.id));
+
+            // For multiSelect: pre-seed the selected state from userVotes if not already set
+            const currentMultiSelection = selectedMulti[poll.id] ??
+              (hasVoted && poll.multiSelect ? Array.from(votedOptionIds) : []);
 
             return (
               <Card key={poll.id} data-testid={`card-poll-${poll.type}`}>
@@ -202,13 +220,25 @@ export default function PollView() {
                       <CardTitle className="flex items-center gap-2">
                         {isDatePoll ? <Calendar className="h-5 w-5" /> : <MapPin className="h-5 w-5" />}
                         {isDatePoll ? "Choose a Date" : "Choose a Course"}
+                        {poll.multiSelect && (
+                          <Badge variant="secondary" className="text-xs">Multi-select</Badge>
+                        )}
                       </CardTitle>
                       <CardDescription>
-                        {hasVoted ? "You've voted" : poll.options.length === 0 ? (isDatePoll ? "No options yet — suggest a date below" : "No courses added yet") : "Select your preferred option"}
+                        {poll.multiSelect
+                          ? hasVoted
+                            ? `You selected ${poll.userVotes.length} option${poll.userVotes.length !== 1 ? "s" : ""} — you can update your selection`
+                            : "Select all options that work for you"
+                          : hasVoted
+                            ? "You've voted"
+                            : poll.options.length === 0
+                              ? (isDatePoll ? "No options yet — suggest a date below" : "No courses added yet")
+                              : "Select your preferred option"
+                        }
                       </CardDescription>
                     </div>
                     <div className="flex items-center gap-2">
-                      {hasVoted && <CheckCircle2 className="h-6 w-6 text-green-600" />}
+                      {hasVoted && !poll.multiSelect && <CheckCircle2 className="h-6 w-6 text-green-600" />}
                       {isOrganizer && poll.visibility === "live" && (
                         <Button
                           size="sm"
@@ -243,7 +273,11 @@ export default function PollView() {
                       />
                       <Button
                         size="sm"
-                        onClick={() => handleAddDate(poll.id)}
+                        onClick={() => {
+                          if (newDateInputs[poll.id]) {
+                            addDateOptionMutation.mutate({ pollId: poll.id, dateOption: newDateInputs[poll.id] });
+                          }
+                        }}
                         disabled={!newDateInputs[poll.id] || addDateOptionMutation.isPending}
                         data-testid={`button-add-date-${poll.id}`}
                       >
@@ -300,7 +334,10 @@ export default function PollView() {
                       </Popover>
                       <Button
                         size="sm"
-                        onClick={() => handleAddCourse(poll.id)}
+                        onClick={() => {
+                          const courseId = selectedCourseIds[poll.id];
+                          if (courseId) addCourseOptionMutation.mutate({ pollId: poll.id, courseId });
+                        }}
                         disabled={!selectedCourseIds[poll.id] || addCourseOptionMutation.isPending}
                         data-testid={`button-add-course-${poll.id}`}
                       >
@@ -317,12 +354,70 @@ export default function PollView() {
                           ? "Use the search above to add courses to this poll."
                           : "No course options have been added yet."}
                     </p>
+                  ) : poll.multiSelect ? (
+                    /* ── Multi-select: always show checkboxes + results ── */
+                    <div className="space-y-3">
+                      {poll.options.map((option) => {
+                        const percentage = totalVotes > 0 ? (option.voteCount / totalVotes) * 100 : 0;
+                        const isChecked = currentMultiSelection.includes(option.id);
+                        const wasVoted = votedOptionIds.has(option.id);
+                        return (
+                          <div
+                            key={option.id}
+                            className={`border rounded-lg p-4 ${wasVoted ? "border-primary" : ""}`}
+                            data-testid={`option-${option.id}`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <Checkbox
+                                id={`multi-${option.id}`}
+                                checked={isChecked}
+                                onCheckedChange={() => toggleMultiOption(poll.id, option.id)}
+                                disabled={poll.visibility !== "live"}
+                                className="mt-0.5"
+                                data-testid={`checkbox-option-${option.id}`}
+                              />
+                              <Label htmlFor={`multi-${option.id}`} className="flex-1 cursor-pointer">
+                                <p className="font-medium">{option.label}</p>
+                                {option.course && (
+                                  <p className="text-sm text-muted-foreground">
+                                    {option.course.city}, {option.course.region}
+                                  </p>
+                                )}
+                              </Label>
+                              <span className="text-sm text-muted-foreground shrink-0">
+                                {option.voteCount} vote{option.voteCount !== 1 ? "s" : ""}
+                              </span>
+                            </div>
+                            {hasVoted && (
+                              <div className="mt-2">
+                                <Progress value={percentage} className="h-1.5" />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {poll.visibility === "live" && (
+                        <Button
+                          onClick={() => handleVote(poll)}
+                          disabled={currentMultiSelection.length === 0 || voteMutation.isPending}
+                          data-testid={`button-vote-${poll.type}`}
+                        >
+                          <Vote className="h-4 w-4 mr-2" />
+                          {voteMutation.isPending
+                            ? "Saving..."
+                            : hasVoted
+                              ? `Update Selection (${currentMultiSelection.length} selected)`
+                              : `Submit Selection (${currentMultiSelection.length} selected)`}
+                        </Button>
+                      )}
+                    </div>
                   ) : !hasVoted ? (
+                    /* ── Single-select: radio group before voting ── */
                     <>
                       <RadioGroup
-                        value={selectedOptions[poll.id] || ""}
+                        value={selectedOption[poll.id] || ""}
                         onValueChange={(value) =>
-                          setSelectedOptions({ ...selectedOptions, [poll.id]: value })
+                          setSelectedOption(prev => ({ ...prev, [poll.id]: value }))
                         }
                       >
                         {poll.options.map((option) => (
@@ -333,21 +428,19 @@ export default function PollView() {
                           >
                             <RadioGroupItem value={option.id} id={option.id} />
                             <Label htmlFor={option.id} className="flex-1 cursor-pointer">
-                              <div>
-                                <p className="font-medium">{option.label}</p>
-                                {option.course && (
-                                  <p className="text-sm text-muted-foreground">
-                                    {option.course.city}, {option.course.region}
-                                  </p>
-                                )}
-                              </div>
+                              <p className="font-medium">{option.label}</p>
+                              {option.course && (
+                                <p className="text-sm text-muted-foreground">
+                                  {option.course.city}, {option.course.region}
+                                </p>
+                              )}
                             </Label>
                           </div>
                         ))}
                       </RadioGroup>
                       <Button
-                        onClick={() => handleVote(poll.id)}
-                        disabled={!selectedOptions[poll.id] || voteMutation.isPending}
+                        onClick={() => handleVote(poll)}
+                        disabled={!selectedOption[poll.id] || voteMutation.isPending}
                         data-testid={`button-vote-${poll.type}`}
                       >
                         <Vote className="h-4 w-4 mr-2" />
@@ -355,10 +448,11 @@ export default function PollView() {
                       </Button>
                     </>
                   ) : (
+                    /* ── Single-select: results after voting ── */
                     <div className="space-y-3">
                       {poll.options.map((option) => {
                         const percentage = totalVotes > 0 ? (option.voteCount / totalVotes) * 100 : 0;
-                        const isUserChoice = poll.userVote?.optionId === option.id;
+                        const isUserChoice = votedOptionIds.has(option.id);
                         return (
                           <div
                             key={option.id}

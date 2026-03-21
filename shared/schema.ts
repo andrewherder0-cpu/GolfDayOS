@@ -138,6 +138,7 @@ export const pollSchema = z.object({
   id: z.string(),
   eventId: z.string(),
   type: pollTypeEnum,
+  multiSelect: z.boolean().default(false),
   closesAt: z.string().optional(), // ISO datetime string
   visibility: pollVisibilityEnum,
   createdAt: z.string(),
@@ -146,6 +147,7 @@ export const pollSchema = z.object({
 export const insertPollSchema = z.object({
   eventId: z.string(),
   type: pollTypeEnum,
+  multiSelect: z.boolean().default(false),
   closesAt: z.string().optional(),
   visibility: pollVisibilityEnum.default("live"),
 });
@@ -388,6 +390,7 @@ export const polls = pgTable("polls", {
   id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
   eventId: varchar("event_id", { length: 36 }).notNull().references(() => events.id),
   type: pollTypeEnumDb("type").notNull(),
+  multiSelect: boolean("multi_select").notNull().default(false),
   closesAt: timestamp("closes_at"),
   visibility: pollVisibilityEnumDb("visibility").notNull().default("live"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

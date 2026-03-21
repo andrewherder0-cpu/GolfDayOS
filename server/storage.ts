@@ -96,8 +96,10 @@ export interface IStorage {
 
   // Votes
   getVote(pollId: string, userId: string): Promise<Vote | undefined>;
+  getUserVotes(pollId: string, userId: string): Promise<Vote[]>;
   getPollVotes(pollId: string): Promise<Vote[]>;
   createVote(vote: InsertVote): Promise<Vote>;
+  deleteUserPollVotes(pollId: string, userId: string): Promise<void>;
 
   // RSVPs
   getRsvp(eventId: string, userId: string): Promise<Rsvp | undefined>;
@@ -551,6 +553,17 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
+  async getUserVotes(pollId: string, userId: string): Promise<Vote[]> {
+    const result = await db
+      .select()
+      .from(votes)
+      .where(and(eq(votes.pollId, pollId), eq(votes.userId, userId)));
+    return result.map(v => ({
+      ...v,
+      createdAt: v.createdAt.toISOString(),
+    }));
+  }
+
   async getPollVotes(pollId: string): Promise<Vote[]> {
     const result = await db
       .select()
@@ -568,6 +581,12 @@ export class DatabaseStorage implements IStorage {
       ...vote,
       createdAt: vote.createdAt.toISOString(),
     };
+  }
+
+  async deleteUserPollVotes(pollId: string, userId: string): Promise<void> {
+    await db.delete(votes).where(
+      and(eq(votes.pollId, pollId), eq(votes.userId, userId))
+    );
   }
 
   // RSVPs
@@ -1078,6 +1097,10 @@ export class MemStorage implements IStorage {
     return Array.from(this.votes.values()).find((v) => v.pollId === pollId && v.userId === userId);
   }
 
+  async getUserVotes(pollId: string, userId: string): Promise<Vote[]> {
+    return Array.from(this.votes.values()).filter((v) => v.pollId === pollId && v.userId === userId);
+  }
+
   async getPollVotes(pollId: string): Promise<Vote[]> {
     return Array.from(this.votes.values()).filter((v) => v.pollId === pollId);
   }
@@ -1091,6 +1114,14 @@ export class MemStorage implements IStorage {
     };
     this.votes.set(id, vote);
     return vote;
+  }
+
+  async deleteUserPollVotes(pollId: string, userId: string): Promise<void> {
+    for (const [id, vote] of this.votes.entries()) {
+      if (vote.pollId === pollId && vote.userId === userId) {
+        this.votes.delete(id);
+      }
+    }
   }
 
   // RSVPs

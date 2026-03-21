@@ -60,7 +60,7 @@ interface PollOption {
 
 interface PollWithOptions extends Poll {
   options: PollOption[];
-  userVote?: string;
+  userVotes: { id: string; optionId: string; pollId: string; userId: string; createdAt: string }[];
 }
 
 interface EventPollsResponse {
@@ -87,6 +87,8 @@ export default function EventDetails() {
   const [pollDialogOpen, setPollDialogOpen] = useState(false);
   const [createCoursePoll, setCreateCoursePoll] = useState(true);
   const [createDatePoll, setCreateDatePoll] = useState(true);
+  const [coursePollMultiSelect, setCoursePollMultiSelect] = useState(false);
+  const [datePollMultiSelect, setDatePollMultiSelect] = useState(false);
 
   const [editTitle, setEditTitle] = useState("");
   const [editNotes, setEditNotes] = useState("");
@@ -129,7 +131,7 @@ export default function EventDetails() {
 
   const openPollsMutation = useMutation({
     mutationFn: () =>
-      apiRequest("POST", `/api/events/${eventId}/polls/open`, { createCoursePoll, createDatePoll }),
+      apiRequest("POST", `/api/events/${eventId}/polls/open`, { createCoursePoll, createDatePoll, coursePollMultiSelect, datePollMultiSelect }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
       toast({ title: "Polls opened successfully!" });
@@ -463,6 +465,9 @@ export default function EventDetails() {
                             </CardTitle>
                             <div className="flex items-center gap-2">
                               <Badge variant="outline" className="text-xs capitalize">{poll.visibility}</Badge>
+                              {poll.multiSelect && (
+                                <Badge variant="secondary" className="text-xs">Multi-select</Badge>
+                              )}
                               <Link href={`/events/${eventId}/polls`}>
                                 <a>
                                   <Button size="sm" variant="outline" data-testid={`button-vote-${poll.type}`}>
@@ -662,17 +667,37 @@ export default function EventDetails() {
                           <DialogDescription>Create polls for group members to vote on course and date</DialogDescription>
                         </DialogHeader>
                         <div className="space-y-4">
-                          <div className="flex items-center space-x-2">
-                            <Checkbox id="coursePoll" checked={createCoursePoll}
-                              onCheckedChange={(c) => setCreateCoursePoll(c as boolean)}
-                              data-testid="checkbox-course-poll" />
-                            <Label htmlFor="coursePoll" className="cursor-pointer">Create Course Poll</Label>
+                          <div className="space-y-2">
+                            <div className="flex items-center space-x-2">
+                              <Checkbox id="coursePoll" checked={createCoursePoll}
+                                onCheckedChange={(c) => setCreateCoursePoll(c as boolean)}
+                                data-testid="checkbox-course-poll" />
+                              <Label htmlFor="coursePoll" className="cursor-pointer font-medium">Create Course Poll</Label>
+                            </div>
+                            {createCoursePoll && (
+                              <div className="ml-6 flex items-center space-x-2">
+                                <Checkbox id="coursePollMultiSelect" checked={coursePollMultiSelect}
+                                  onCheckedChange={(c) => setCoursePollMultiSelect(c as boolean)}
+                                  data-testid="checkbox-course-poll-multi" />
+                                <Label htmlFor="coursePollMultiSelect" className="cursor-pointer text-sm text-muted-foreground">Allow multiple selections</Label>
+                              </div>
+                            )}
                           </div>
-                          <div className="flex items-center space-x-2">
-                            <Checkbox id="datePoll" checked={createDatePoll}
-                              onCheckedChange={(c) => setCreateDatePoll(c as boolean)}
-                              data-testid="checkbox-date-poll" />
-                            <Label htmlFor="datePoll" className="cursor-pointer">Create Date Poll</Label>
+                          <div className="space-y-2">
+                            <div className="flex items-center space-x-2">
+                              <Checkbox id="datePoll" checked={createDatePoll}
+                                onCheckedChange={(c) => setCreateDatePoll(c as boolean)}
+                                data-testid="checkbox-date-poll" />
+                              <Label htmlFor="datePoll" className="cursor-pointer font-medium">Create Date Poll</Label>
+                            </div>
+                            {createDatePoll && (
+                              <div className="ml-6 flex items-center space-x-2">
+                                <Checkbox id="datePollMultiSelect" checked={datePollMultiSelect}
+                                  onCheckedChange={(c) => setDatePollMultiSelect(c as boolean)}
+                                  data-testid="checkbox-date-poll-multi" />
+                                <Label htmlFor="datePollMultiSelect" className="cursor-pointer text-sm text-muted-foreground">Allow multiple selections</Label>
+                              </div>
+                            )}
                           </div>
                           <Button onClick={() => openPollsMutation.mutate()}
                             disabled={openPollsMutation.isPending || (!createCoursePoll && !createDatePoll)}
@@ -1025,17 +1050,37 @@ export default function EventDetails() {
                             <DialogDescription>Create polls for group members to vote on course and date</DialogDescription>
                           </DialogHeader>
                           <div className="space-y-4">
-                            <div className="flex items-center space-x-2">
-                              <Checkbox id="coursePoll2" checked={createCoursePoll}
-                                onCheckedChange={(c) => setCreateCoursePoll(c as boolean)}
-                                data-testid="checkbox-course-poll" />
-                              <Label htmlFor="coursePoll2" className="cursor-pointer">Create Course Poll</Label>
+                            <div className="space-y-2">
+                              <div className="flex items-center space-x-2">
+                                <Checkbox id="coursePoll2" checked={createCoursePoll}
+                                  onCheckedChange={(c) => setCreateCoursePoll(c as boolean)}
+                                  data-testid="checkbox-course-poll" />
+                                <Label htmlFor="coursePoll2" className="cursor-pointer font-medium">Create Course Poll</Label>
+                              </div>
+                              {createCoursePoll && (
+                                <div className="ml-6 flex items-center space-x-2">
+                                  <Checkbox id="coursePollMultiSelect2" checked={coursePollMultiSelect}
+                                    onCheckedChange={(c) => setCoursePollMultiSelect(c as boolean)}
+                                    data-testid="checkbox-course-poll-multi" />
+                                  <Label htmlFor="coursePollMultiSelect2" className="cursor-pointer text-sm text-muted-foreground">Allow multiple selections</Label>
+                                </div>
+                              )}
                             </div>
-                            <div className="flex items-center space-x-2">
-                              <Checkbox id="datePoll2" checked={createDatePoll}
-                                onCheckedChange={(c) => setCreateDatePoll(c as boolean)}
-                                data-testid="checkbox-date-poll" />
-                              <Label htmlFor="datePoll2" className="cursor-pointer">Create Date Poll</Label>
+                            <div className="space-y-2">
+                              <div className="flex items-center space-x-2">
+                                <Checkbox id="datePoll2" checked={createDatePoll}
+                                  onCheckedChange={(c) => setCreateDatePoll(c as boolean)}
+                                  data-testid="checkbox-date-poll" />
+                                <Label htmlFor="datePoll2" className="cursor-pointer font-medium">Create Date Poll</Label>
+                              </div>
+                              {createDatePoll && (
+                                <div className="ml-6 flex items-center space-x-2">
+                                  <Checkbox id="datePollMultiSelect2" checked={datePollMultiSelect}
+                                    onCheckedChange={(c) => setDatePollMultiSelect(c as boolean)}
+                                    data-testid="checkbox-date-poll-multi" />
+                                  <Label htmlFor="datePollMultiSelect2" className="cursor-pointer text-sm text-muted-foreground">Allow multiple selections</Label>
+                                </div>
+                              )}
                             </div>
                             <Button onClick={() => openPollsMutation.mutate()}
                               disabled={openPollsMutation.isPending || (!createCoursePoll && !createDatePoll)}
