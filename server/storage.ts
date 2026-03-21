@@ -389,6 +389,8 @@ export class DatabaseStorage implements IStorage {
         state: events.state,
         capacity: events.capacity,
         notes: events.notes,
+        gameType: events.gameType,
+        teamSize: events.teamSize,
         chosenCourseId: events.chosenCourseId,
         chosenDate: events.chosenDate,
         createdBy: events.createdBy,

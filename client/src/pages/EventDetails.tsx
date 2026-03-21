@@ -93,6 +93,8 @@ export default function EventDetails() {
   const [editTitle, setEditTitle] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editCapacity, setEditCapacity] = useState("");
+  const [editGameType, setEditGameType] = useState("");
+  const [editTeamSize, setEditTeamSize] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   const [sendUpdateMsg, setSendUpdateMsg] = useState("");
@@ -162,7 +164,7 @@ export default function EventDetails() {
   });
 
   const updateEventMutation = useMutation({
-    mutationFn: (data: { title?: string; notes?: string; capacity?: number }) =>
+    mutationFn: (data: { title?: string; notes?: string; capacity?: number; gameType?: string; teamSize?: number }) =>
       apiRequest("PATCH", `/api/events/${eventId}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
@@ -368,6 +370,24 @@ export default function EventDetails() {
                       <p className="text-muted-foreground" data-testid="text-event-notes">{event.notes}</p>
                     )}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {event.gameType && (
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Game Type</Label>
+                          <div className="mt-1">
+                            <span className="text-sm font-medium" data-testid="text-game-type">{event.gameType}</span>
+                          </div>
+                        </div>
+                      )}
+                      {event.teamSize && (
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Team Size</Label>
+                          <div className="mt-1">
+                            <span className="text-sm font-medium" data-testid="text-team-size">
+                              {event.teamSize} {event.teamSize === 1 ? "player" : "players"} per team
+                            </span>
+                          </div>
+                        </div>
+                      )}
                       {event.course && (
                         <div>
                           <Label className="text-xs text-muted-foreground">Course</Label>
@@ -1203,6 +1223,8 @@ export default function EventDetails() {
                           setEditTitle(event.title);
                           setEditNotes(event.notes ?? "");
                           setEditCapacity(String(event.capacity));
+                          setEditGameType(event.gameType ?? "");
+                          setEditTeamSize(event.teamSize ? String(event.teamSize) : "");
                         }
                       }}>
                         <DialogTrigger asChild>
@@ -1220,8 +1242,38 @@ export default function EventDetails() {
                                 onChange={(e) => setEditTitle(e.target.value)}
                                 data-testid="input-edit-title" />
                             </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="edit-game-type">Game Type</Label>
+                                <Select value={editGameType} onValueChange={setEditGameType}>
+                                  <SelectTrigger id="edit-game-type" data-testid="select-edit-game-type">
+                                    <SelectValue placeholder="Select format" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {(["Scramble", "Match Play", "Stroke Play", "Skins"] as const).map((type) => (
+                                      <SelectItem key={type} value={type}>{type}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="edit-team-size">Team Size</Label>
+                                <Select value={editTeamSize} onValueChange={setEditTeamSize}>
+                                  <SelectTrigger id="edit-team-size" data-testid="select-edit-team-size">
+                                    <SelectValue placeholder="Per team" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {([1, 2, 3, 4] as const).map((size) => (
+                                      <SelectItem key={size} value={String(size)}>
+                                        {size} {size === 1 ? "player" : "players"}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
                             <div className="space-y-2">
-                              <Label htmlFor="edit-notes">Notes</Label>
+                              <Label htmlFor="edit-notes">Description</Label>
                               <Textarea id="edit-notes" value={editNotes}
                                 onChange={(e) => setEditNotes(e.target.value)}
                                 data-testid="input-edit-notes" />
@@ -1236,6 +1288,8 @@ export default function EventDetails() {
                               title: editTitle,
                               notes: editNotes,
                               capacity: Number(editCapacity),
+                              gameType: editGameType || undefined,
+                              teamSize: editTeamSize ? Number(editTeamSize) : undefined,
                             })} disabled={updateEventMutation.isPending}
                               data-testid="button-save-edit">
                               {updateEventMutation.isPending ? "Saving..." : "Save Changes"}

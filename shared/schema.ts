@@ -96,6 +96,7 @@ export type InsertCourse = z.infer<typeof insertCourseSchema>;
 
 // ===== EVENT SCHEMA =====
 export const eventStateEnum = z.enum(["draft", "polling", "rsvp", "final", "closed"]);
+export const gameTypeEnum = z.enum(["Scramble", "Match Play", "Stroke Play", "Skins"]);
 
 export const eventSchema = z.object({
   id: z.string(),
@@ -104,6 +105,8 @@ export const eventSchema = z.object({
   state: eventStateEnum,
   capacity: z.number(),
   notes: z.string().optional(),
+  gameType: gameTypeEnum.optional(),
+  teamSize: z.number().int().min(1).max(4).optional(),
   chosenCourseId: z.string().optional(),
   chosenDate: z.string().optional(), // ISO date string
   createdBy: z.string(),
@@ -117,15 +120,20 @@ export const insertEventSchema = z.object({
   title: z.string().min(1),
   capacity: z.number().min(1).max(100),
   notes: z.string().optional(),
+  gameType: gameTypeEnum.optional(),
+  teamSize: z.number().int().min(1).max(4).optional(),
 });
 
 export const updateEventSchema = z.object({
   title: z.string().min(1).optional(),
   capacity: z.number().min(1).max(100).optional(),
   notes: z.string().optional(),
+  gameType: gameTypeEnum.optional(),
+  teamSize: z.number().int().min(1).max(4).optional(),
 });
 
 export type EventState = z.infer<typeof eventStateEnum>;
+export type GameType = z.infer<typeof gameTypeEnum>;
 export type Event = z.infer<typeof eventSchema>;
 export type InsertEvent = z.infer<typeof insertEventSchema>;
 export type UpdateEvent = z.infer<typeof updateEventSchema>;
@@ -325,6 +333,7 @@ export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
 // Enums
 export const membershipRoleEnumDb = pgEnum("membership_role", ["owner", "organizer", "member"]);
 export const eventStateEnumDb = pgEnum("event_state", ["draft", "polling", "rsvp", "final", "closed"]);
+export const gameTypeEnumDb = pgEnum("game_type", ["Scramble", "Match Play", "Stroke Play", "Skins"]);
 export const pollTypeEnumDb = pgEnum("poll_type", ["course", "date"]);
 export const pollVisibilityEnumDb = pgEnum("poll_visibility", ["live", "hidden"]);
 export const rsvpStatusEnumDb = pgEnum("rsvp_status", ["joined", "waitlisted", "withdrawn"]);
@@ -378,6 +387,8 @@ export const events = pgTable("events", {
   state: eventStateEnumDb("state").notNull().default("draft"),
   capacity: integer("capacity").notNull(),
   notes: text("notes"),
+  gameType: gameTypeEnumDb("game_type"),
+  teamSize: integer("team_size"),
   chosenCourseId: varchar("chosen_course_id", { length: 36 }).references(() => courses.id),
   chosenDate: varchar("chosen_date", { length: 20 }),
   createdBy: varchar("created_by", { length: 36 }).notNull().references(() => users.id),

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ArrowLeft } from "lucide-react";
@@ -17,6 +18,9 @@ import type { Event, Group, Membership, User } from "@shared/schema";
 interface GroupWithMembers extends Group {
   members: (Membership & { user: User })[];
 }
+
+const GAME_TYPES = ["Scramble", "Match Play", "Stroke Play", "Skins"] as const;
+const TEAM_SIZES = [1, 2, 3, 4] as const;
 
 export default function EventNew() {
   const [, params] = useRoute("/groups/:groupId/events/new");
@@ -30,6 +34,8 @@ export default function EventNew() {
     title: "",
     capacity: 16,
     notes: "",
+    gameType: "" as string,
+    teamSize: "" as string,
   });
 
   const { data: group } = useQuery<GroupWithMembers>({
@@ -50,7 +56,14 @@ export default function EventNew() {
   }, [group, currentUser]);
 
   const createMutation = useMutation({
-    mutationFn: (data: { groupId: string; title: string; capacity: number; notes?: string }) => {
+    mutationFn: (data: {
+      groupId: string;
+      title: string;
+      capacity: number;
+      notes?: string;
+      gameType?: string;
+      teamSize?: number;
+    }) => {
       return apiRequest<Event>("POST", "/api/events", data);
     },
     onSuccess: (event) => {
@@ -73,7 +86,11 @@ export default function EventNew() {
     if (!groupId) return;
     createMutation.mutate({
       groupId,
-      ...formData,
+      title: formData.title,
+      capacity: formData.capacity,
+      notes: formData.notes || undefined,
+      gameType: formData.gameType || undefined,
+      teamSize: formData.teamSize ? parseInt(formData.teamSize) : undefined,
     });
   };
 
@@ -127,8 +144,49 @@ export default function EventNew() {
                 </p>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="game-type">Game Type</Label>
+                  <Select
+                    value={formData.gameType}
+                    onValueChange={(value) => setFormData({ ...formData, gameType: value })}
+                  >
+                    <SelectTrigger id="game-type" data-testid="select-game-type">
+                      <SelectValue placeholder="Select format" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {GAME_TYPES.map((type) => (
+                        <SelectItem key={type} value={type} data-testid={`option-game-type-${type}`}>
+                          {type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="team-size">Team Size</Label>
+                  <Select
+                    value={formData.teamSize}
+                    onValueChange={(value) => setFormData({ ...formData, teamSize: value })}
+                  >
+                    <SelectTrigger id="team-size" data-testid="select-team-size">
+                      <SelectValue placeholder="Players per team" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TEAM_SIZES.map((size) => (
+                        <SelectItem key={size} value={String(size)} data-testid={`option-team-size-${size}`}>
+                          {size} {size === 1 ? "player" : "players"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-sm text-muted-foreground">1–4 players per team</p>
+                </div>
+              </div>
+
               <div className="space-y-2">
-                <Label htmlFor="notes">Notes (optional)</Label>
+                <Label htmlFor="notes">Description (optional)</Label>
                 <Textarea
                   id="notes"
                   value={formData.notes}
