@@ -157,6 +157,11 @@ Golf Day OS helps groups organize golf events with a complete workflow: draft cr
 - **Pairing**: groups of players with tee times
 - **ActivityLog**: event audit trail
 
+## Security Notes
+
+- **Google Maps API Key**: The `GOOGLE_MAPS_API_KEY` is only used server-side (embedded in backend-rendered iframe HTML via `GET /api/maps/frame`). It is never bundled into the React frontend. For production, restrict this key in Google Cloud Console to specific HTTP referrers (your deployed domain) to prevent unauthorized usage.
+- **Email invitations**: Currently stub (console log). To enable real delivery, replace `sendEmail()` in `server/utils/email.ts` with a service like SendGrid or AWS SES.
+
 ## User Preferences
 
 None specified yet.
