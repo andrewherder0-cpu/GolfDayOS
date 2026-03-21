@@ -8,6 +8,18 @@ Golf Day OS helps groups organize golf events with a complete workflow: draft cr
 
 ## Recent Changes
 
+- **March 21, 2026**: GTA Golf Course Map
+  - Added `phone` varchar field to courses table (schema + db:push)
+  - Seeded 25 real Greater Toronto Area golf courses with accurate lat/lng, phone, website, tags, and fee notes
+  - Built `CourseMapView` React component using Leaflet + OpenStreetMap (no API key exposure)
+  - Interactive map centered on GTA with markers for each course (click → popup with details)
+  - Filter bar (data-testid="input-map-search") filters markers by name/city/tags
+  - "Add to Poll" button in popups — visible only to event organizers when course poll is active
+  - New API routes: GET /api/courses/map (returns courses with coordinates), POST /api/polls/:pollId/options (add course to poll), POST /api/seed/gta-courses (idempotent seed)
+  - Auto-seed on startup if no courses exist
+  - Integrated as collapsible "GTA Course Map" card in EventDetails for draft/polling events
+  - End-to-end tested: map loads, filter works, Add to Poll flow working
+
 - **March 21, 2026**: In-App Tournament Chat
   - Added `chatMessages` PostgreSQL table (event_id, user_id, content, created_at)
   - Implemented `getChatMessages` and `createChatMessage` storage methods

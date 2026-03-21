@@ -71,6 +71,7 @@ export const courseSchema = z.object({
   tags: z.array(z.string()),
   feeNote: z.string().optional(),
   website: z.string().optional(),
+  phone: z.string().optional(),
   isActive: z.boolean(),
   createdAt: z.string(),
 });
@@ -84,6 +85,7 @@ export const insertCourseSchema = z.object({
   tags: z.array(z.string()).default([]),
   feeNote: z.string().optional(),
   website: z.string().url().optional().or(z.literal("")),
+  phone: z.string().optional(),
   isActive: z.boolean().default(true),
 });
 
@@ -336,6 +338,7 @@ export const courses = pgTable("courses", {
   tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
   feeNote: text("fee_note"),
   website: varchar("website", { length: 500 }),
+  phone: varchar("phone", { length: 50 }),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

@@ -13,10 +13,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthContext } from "@/lib/AuthProvider";
 import { apiRequest } from "@/lib/queryClient";
-import { Calendar, MapPin, Users, Vote, CheckCircle2, MessageSquare } from "lucide-react";
+import { Calendar, MapPin, Users, Vote, CheckCircle2, MessageSquare, Map, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import type { Event, Group, Course, Poll, Rsvp, User } from "@shared/schema";
 import { ChatView } from "@/components/ChatView";
+import { CourseMapView } from "@/components/CourseMapView";
 
 interface EventWithDetails extends Event {
   group: Group;
@@ -35,6 +36,7 @@ export default function EventDetails() {
   const [pollDialogOpen, setPollDialogOpen] = useState(false);
   const [createCoursePoll, setCreateCoursePoll] = useState(true);
   const [createDatePoll, setCreateDatePoll] = useState(true);
+  const [mapOpen, setMapOpen] = useState(false);
 
   const { data: event, isLoading } = useQuery<EventWithDetails>({
     queryKey: ["/api/events", eventId],
@@ -276,6 +278,34 @@ export default function EventDetails() {
                 </CardContent>
               </Card>
             )}
+          {/* Course Map */}
+          {(event.state === "draft" || event.state === "polling") && (
+            <Card className="mt-6">
+              <CardHeader
+                className="cursor-pointer flex flex-row items-center justify-between gap-1 pb-3"
+                onClick={() => setMapOpen(o => !o)}
+                data-testid="button-toggle-map"
+              >
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Map className="h-4 w-4" />
+                    GTA Course Map
+                  </CardTitle>
+                  <CardDescription className="mt-0.5">Browse local courses and add them to the course poll</CardDescription>
+                </div>
+                {mapOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />}
+              </CardHeader>
+              {mapOpen && (
+                <CardContent>
+                  <CourseMapView
+                    coursePoll={event.polls?.find(p => p.type === "course")}
+                    isOrganizer={isOwner}
+                    eventId={event.id}
+                  />
+                </CardContent>
+              )}
+            </Card>
+          )}
           </div>
 
           {/* Sidebar */}
