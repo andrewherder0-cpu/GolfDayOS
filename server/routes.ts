@@ -1188,6 +1188,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== CHAT ROUTES =====
+  app.get("/api/chat/event/:eventId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const event = await storage.getEvent(req.params.eventId);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      // Check if user is a member of the group
+      const membership = await storage.getMembership(req.user!.id, event.groupId);
+      if (!membership) {
+        return res.status(403).json({ error: "Not a member of this group" });
+      }
+
+      const messages = await storage.getChatMessages(event.id);
+
+      // Attach sender info to each message
+      const messagesWithUsers = await Promise.all(
+        messages.map(async (msg) => {
+          const sender = await storage.getUser(msg.userId);
+          const senderMembership = sender ? await storage.getMembership(sender.id, event.groupId) : undefined;
+          return {
+            ...msg,
+            senderName: sender?.name ?? "Unknown",
+            senderRole: senderMembership?.role ?? "member",
+          };
+        })
+      );
+
+      res.json(messagesWithUsers);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/chat/event/:eventId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const event = await storage.getEvent(req.params.eventId);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      // Check if user is a member of the group
+      const membership = await storage.getMembership(req.user!.id, event.groupId);
+      if (!membership) {
+        return res.status(403).json({ error: "Not a member of this group" });
+      }
+
+      const { content } = req.body;
+      if (!content || typeof content !== "string" || content.trim().length === 0) {
+        return res.status(400).json({ error: "Message content is required" });
+      }
+
+      if (content.trim().length > 2000) {
+        return res.status(400).json({ error: "Message too long (max 2000 characters)" });
+      }
+
+      const message = await storage.createChatMessage({
+        eventId: event.id,
+        userId: req.user!.id,
+        content: content.trim(),
+      });
+
+      const sender = req.user!;
+      res.json({
+        ...message,
+        senderName: sender.name,
+        senderRole: membership.role,
+      });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

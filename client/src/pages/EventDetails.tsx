@@ -13,9 +13,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthContext } from "@/lib/AuthProvider";
 import { apiRequest } from "@/lib/queryClient";
-import { Calendar, MapPin, Users, Vote, CheckCircle2 } from "lucide-react";
+import { Calendar, MapPin, Users, Vote, CheckCircle2, MessageSquare } from "lucide-react";
 import { useState } from "react";
 import type { Event, Group, Course, Poll, Rsvp, User } from "@shared/schema";
+import { ChatView } from "@/components/ChatView";
 
 interface EventWithDetails extends Event {
   group: Group;
@@ -278,7 +279,7 @@ export default function EventDetails() {
           </div>
 
           {/* Sidebar */}
-          <div>
+          <div className="flex flex-col gap-6">
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -293,6 +294,20 @@ export default function EventDetails() {
                     {waitlistedCount} on waitlist
                   </p>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* Chat */}
+            <Card className="flex flex-col" style={{ height: "420px" }}>
+              <CardHeader className="pb-2 shrink-0">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <MessageSquare className="h-5 w-5" />
+                  Group Chat
+                </CardTitle>
+                <CardDescription>Chat with your group about this event</CardDescription>
+              </CardHeader>
+              <CardContent className="flex-1 p-0 min-h-0">
+                <ChatView eventId={event.id} organizerId={event.createdBy} />
               </CardContent>
             </Card>
           </div>

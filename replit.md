@@ -8,6 +8,17 @@ Golf Day OS helps groups organize golf events with a complete workflow: draft cr
 
 ## Recent Changes
 
+- **March 21, 2026**: In-App Tournament Chat
+  - Added `chatMessages` PostgreSQL table (event_id, user_id, content, created_at)
+  - Implemented `getChatMessages` and `createChatMessage` storage methods
+  - Added `GET /api/chat/event/:eventId` and `POST /api/chat/event/:eventId` routes (group membership gated)
+  - Built `ChatView` React component with 3-second polling, scrollable message list, avatar initials, timestamps
+  - Own messages displayed on right (primary bg); others on left (muted bg) with sender name
+  - Organizer badge shown for event creator messages
+  - Enter key (without Shift) sends message; Send icon button also available
+  - Integrated into EventDetails page as "Group Chat" card in the right sidebar
+  - End-to-end tested: send messages, keyboard shortcut, auto-clear input, organizer label all working
+
 - **October 31, 2025**: Landing Page Visual Enhancements
   - Replaced hero background with animated gradient (green, gold) using Framer Motion
   - Integrated 3 custom AI-generated images: dashboard mockup, golfers planning, pairings/scorecard

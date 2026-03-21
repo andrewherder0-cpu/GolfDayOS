@@ -251,6 +251,24 @@ export const insertPairingMemberSchema = z.object({
 export type PairingMember = z.infer<typeof pairingMemberSchema>;
 export type InsertPairingMember = z.infer<typeof insertPairingMemberSchema>;
 
+// ===== CHAT MESSAGE SCHEMA =====
+export const chatMessageSchema = z.object({
+  id: z.string(),
+  eventId: z.string(),
+  userId: z.string(),
+  content: z.string(),
+  createdAt: z.string(),
+});
+
+export const insertChatMessageSchema = z.object({
+  eventId: z.string(),
+  userId: z.string(),
+  content: z.string().min(1).max(2000),
+});
+
+export type ChatMessage = z.infer<typeof chatMessageSchema>;
+export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
+
 // ===== ACTIVITY LOG SCHEMA =====
 export const activityLogSchema = z.object({
   id: z.string(),
@@ -399,6 +417,14 @@ export const activityLogs = pgTable("activity_logs", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const chatMessages = pgTable("chat_messages", {
+  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  eventId: varchar("event_id", { length: 36 }).notNull().references(() => events.id),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   memberships: many(memberships),
@@ -408,6 +434,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   rsvps: many(rsvps),
   pairingMembers: many(pairingMembers),
   activityLogs: many(activityLogs),
+  chatMessages: many(chatMessages),
 }));
 
 export const groupsRelations = relations(groups, ({ one, many }) => ({
@@ -447,6 +474,18 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
   rsvps: many(rsvps),
   pairings: many(pairings),
   activityLogs: many(activityLogs),
+  chatMessages: many(chatMessages),
+}));
+
+export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
+  event: one(events, {
+    fields: [chatMessages.eventId],
+    references: [events.id],
+  }),
+  user: one(users, {
+    fields: [chatMessages.userId],
+    references: [users.id],
+  }),
 }));
 
 export const pollsRelations = relations(polls, ({ one, many }) => ({

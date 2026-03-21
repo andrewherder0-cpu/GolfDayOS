@@ -14,6 +14,7 @@ import {
   pairings,
   pairingMembers,
   activityLogs,
+  chatMessages,
 } from "@shared/schema";
 import type {
   User,
@@ -41,6 +42,8 @@ import type {
   InsertPairingMember,
   ActivityLog,
   InsertActivityLog,
+  ChatMessage,
+  InsertChatMessage,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -113,6 +116,10 @@ export interface IStorage {
   // Activity Logs
   createActivityLog(log: InsertActivityLog): Promise<ActivityLog>;
   getEventActivityLogs(eventId: string): Promise<ActivityLog[]>;
+
+  // Chat Messages
+  getChatMessages(eventId: string): Promise<ChatMessage[]>;
+  createChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -708,6 +715,27 @@ export class DatabaseStorage implements IStorage {
       payloadJson: l.payloadJson ? JSON.stringify(l.payloadJson) : undefined,
       createdAt: l.createdAt.toISOString(),
     }));
+  }
+
+  // Chat Messages
+  async getChatMessages(eventId: string): Promise<ChatMessage[]> {
+    const result = await db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.eventId, eventId))
+      .orderBy(asc(chatMessages.createdAt));
+    return result.map(m => ({
+      ...m,
+      createdAt: m.createdAt.toISOString(),
+    }));
+  }
+
+  async createChatMessage(message: InsertChatMessage): Promise<ChatMessage> {
+    const [msg] = await db.insert(chatMessages).values(message).returning();
+    return {
+      ...msg,
+      createdAt: msg.createdAt.toISOString(),
+    };
   }
 }
 
