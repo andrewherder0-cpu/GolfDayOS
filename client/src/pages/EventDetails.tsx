@@ -29,6 +29,10 @@ import type { Event, Group, Course, Poll, Rsvp, User, Membership } from "@shared
 import { ChatView } from "@/components/ChatView";
 import { CourseMapView } from "@/components/CourseMapView";
 
+function getErrorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : "An unexpected error occurred";
+}
+
 interface MemberWithUser extends Membership {
   user: User;
 }
@@ -119,7 +123,7 @@ export default function EventDetails() {
       toast({ title: "Polls opened successfully!" });
       setPollDialogOpen(false);
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
   });
 
   const openRsvpMutation = useMutation({
@@ -128,7 +132,7 @@ export default function EventDetails() {
       queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
       toast({ title: "RSVP period opened!" });
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
   });
 
   const finalizeMutation = useMutation({
@@ -137,7 +141,7 @@ export default function EventDetails() {
       queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
       toast({ title: "Event finalized!" });
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
   });
 
   const updateEventMutation = useMutation({
@@ -148,7 +152,7 @@ export default function EventDetails() {
       toast({ title: "Event updated!" });
       setEditDialogOpen(false);
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
   });
 
   const joinRsvpMutation = useMutation({
@@ -157,7 +161,7 @@ export default function EventDetails() {
       queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
       toast({ title: "RSVP confirmed!" });
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
   });
 
   const withdrawRsvpMutation = useMutation({
@@ -166,7 +170,7 @@ export default function EventDetails() {
       queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
       toast({ title: "RSVP withdrawn" });
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
   });
 
   const claimRsvpMutation = useMutation({
@@ -175,7 +179,7 @@ export default function EventDetails() {
       queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
       toast({ title: "Spot claimed!" });
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
   });
 
   const sendUpdateMutation = useMutation({
@@ -187,7 +191,7 @@ export default function EventDetails() {
       setSendUpdateMsg("");
       setSendUpdateDialogOpen(false);
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
   });
 
   const updateRoleMutation = useMutation({
@@ -197,7 +201,7 @@ export default function EventDetails() {
       queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
       toast({ title: "Role updated!" });
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
   });
 
   if (isLoading || !event) {
@@ -735,7 +739,11 @@ export default function EventDetails() {
                 <CardDescription>Browse local courses and add them to the course poll</CardDescription>
               </CardHeader>
               <CardContent>
-                <CourseMapView coursePoll={coursePoll} isOrganizer={isOrganizer} eventId={event.id} />
+                {event.id ? (
+                  <CourseMapView coursePoll={coursePoll} isOrganizer={isOrganizer} eventId={event.id} />
+                ) : (
+                  <Alert><AlertDescription>Course map is not available at this time.</AlertDescription></Alert>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -750,7 +758,11 @@ export default function EventDetails() {
                 <CardDescription>Chat with your group about this event</CardDescription>
               </CardHeader>
               <CardContent className="flex-1 p-0 min-h-0">
-                <ChatView eventId={event.id} />
+                {event.id ? (
+                  <ChatView eventId={event.id} />
+                ) : (
+                  <Alert><AlertDescription>Chat is not available at this time.</AlertDescription></Alert>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
