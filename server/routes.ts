@@ -794,6 +794,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Only event organizers can delete polls" });
       }
       await storage.deletePoll(poll.id);
+      const remainingPolls = await storage.getEventPolls(event.id);
+      if (remainingPolls.length === 0 && event.state === "polling") {
+        await storage.updateEvent(event.id, { state: "draft" });
+      }
       res.json({ success: true });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Unknown error";
@@ -1087,11 +1091,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       const group = await storage.getGroup(event.groupId);
+      const membership = await storage.getMembership(req.user!.id, event.groupId);
 
       res.json({
         ...event,
         group,
         polls: pollsWithDetails,
+        membership,
       });
     } catch (error: any) {
       res.status(400).json({ error: error.message });

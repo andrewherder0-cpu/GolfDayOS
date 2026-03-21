@@ -11,11 +11,13 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthContext } from "@/lib/AuthProvider";
 import { apiRequest } from "@/lib/queryClient";
-import { Vote, CheckCircle2, Calendar, MapPin, Plus, Trash2 } from "lucide-react";
-import type { Event, Group, Poll, PollOption, Vote as VoteType, Course } from "@shared/schema";
+import { Vote, CheckCircle2, Calendar, MapPin, Plus, Trash2, ChevronsUpDown } from "lucide-react";
+import type { Event, Group, Poll, PollOption, Vote as VoteType, Course, Membership } from "@shared/schema";
 
 interface PollWithDetails extends Poll {
   options: (PollOption & { course?: Course; voteCount: number })[];
@@ -25,6 +27,7 @@ interface PollWithDetails extends Poll {
 interface EventWithPolls extends Event {
   group: Group;
   polls: PollWithDetails[];
+  membership?: Membership;
 }
 
 export default function PollView() {
@@ -36,7 +39,9 @@ export default function PollView() {
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [tiebreakSelection, setTiebreakSelection] = useState<string>("");
   const [newDateInputs, setNewDateInputs] = useState<Record<string, string>>({});
+  const [coursePickerOpen, setCoursePickerOpen] = useState<Record<string, boolean>>({});
   const [selectedCourseIds, setSelectedCourseIds] = useState<Record<string, string>>({});
+  const [selectedCourseLabels, setSelectedCourseLabels] = useState<Record<string, string>>({});
 
   const { data: event, isLoading } = useQuery<EventWithPolls>({
     queryKey: ["/api/polls/event", eventId],
@@ -77,6 +82,7 @@ export default function PollView() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/polls/event", eventId] });
       setSelectedCourseIds(prev => ({ ...prev, [variables.pollId]: "" }));
+      setSelectedCourseLabels(prev => ({ ...prev, [variables.pollId]: "" }));
       toast({ title: "Course added to poll!" });
     },
     onError: (err: unknown) => {
@@ -127,7 +133,9 @@ export default function PollView() {
     );
   }
 
-  const isOwner = event.createdBy === user?.id;
+  const isOrganizer = event.createdBy === user?.id ||
+    event.membership?.role === "owner" ||
+    event.membership?.role === "organizer";
 
   const handleVote = (pollId: string) => {
     const optionId = selectedOptions[pollId];
@@ -201,7 +209,7 @@ export default function PollView() {
                     </div>
                     <div className="flex items-center gap-2">
                       {hasVoted && <CheckCircle2 className="h-6 w-6 text-green-600" />}
-                      {isOwner && poll.visibility === "live" && (
+                      {isOrganizer && poll.visibility === "live" && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -221,7 +229,7 @@ export default function PollView() {
                 </CardHeader>
                 <CardContent className="space-y-4">
 
-                  {/* Add date option — shown to all members for date polls */}
+                  {/* Add date option — all group members can suggest dates */}
                   {isDatePoll && poll.visibility === "live" && (
                     <div className="flex gap-2 items-center p-3 bg-muted/40 rounded-md">
                       <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -244,33 +252,56 @@ export default function PollView() {
                     </div>
                   )}
 
-                  {/* Add course option — organizer only for course polls */}
-                  {!isDatePoll && poll.visibility === "live" && isOwner && (
+                  {/* Add course option — organizer only, searchable combobox */}
+                  {!isDatePoll && poll.visibility === "live" && isOrganizer && (
                     <div className="flex gap-2 items-center p-3 bg-muted/40 rounded-md">
                       <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <Select
-                        value={selectedCourseIds[poll.id] || ""}
-                        onValueChange={(val) => setSelectedCourseIds(prev => ({ ...prev, [poll.id]: val }))}
+                      <Popover
+                        open={coursePickerOpen[poll.id] ?? false}
+                        onOpenChange={(open) => setCoursePickerOpen(prev => ({ ...prev, [poll.id]: open }))}
                       >
-                        <SelectTrigger className="flex-1" data-testid={`select-course-${poll.id}`}>
-                          <SelectValue placeholder="Select a course to add..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableCourses.length === 0 ? (
-                            <SelectItem value="_none" disabled>All courses already added</SelectItem>
-                          ) : (
-                            availableCourses.map(course => (
-                              <SelectItem key={course.id} value={course.id}>
-                                {course.name}{course.city ? ` — ${course.city}` : ""}
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="flex-1 justify-between font-normal"
+                            data-testid={`button-course-picker-${poll.id}`}
+                          >
+                            <span className={selectedCourseLabels[poll.id] ? "" : "text-muted-foreground"}>
+                              {selectedCourseLabels[poll.id] || "Search for a course..."}
+                            </span>
+                            <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80 p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search courses..." />
+                            <CommandList>
+                              <CommandEmpty>No courses found.</CommandEmpty>
+                              {availableCourses.map(course => (
+                                <CommandItem
+                                  key={course.id}
+                                  value={`${course.name} ${course.city ?? ""}`}
+                                  onSelect={() => {
+                                    setSelectedCourseIds(prev => ({ ...prev, [poll.id]: course.id }));
+                                    setSelectedCourseLabels(prev => ({ ...prev, [poll.id]: `${course.name}${course.city ? ` — ${course.city}` : ""}` }));
+                                    setCoursePickerOpen(prev => ({ ...prev, [poll.id]: false }));
+                                  }}
+                                  data-testid={`course-option-${course.id}`}
+                                >
+                                  <div>
+                                    <p className="text-sm font-medium">{course.name}</p>
+                                    {course.city && <p className="text-xs text-muted-foreground">{course.city}, {course.region}</p>}
+                                  </div>
+                                </CommandItem>
+                              ))}
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                       <Button
                         size="sm"
                         onClick={() => handleAddCourse(poll.id)}
-                        disabled={!selectedCourseIds[poll.id] || selectedCourseIds[poll.id] === "_none" || addCourseOptionMutation.isPending}
+                        disabled={!selectedCourseIds[poll.id] || addCourseOptionMutation.isPending}
                         data-testid={`button-add-course-${poll.id}`}
                       >
                         <Plus className="h-3 w-3 mr-1" />Add
@@ -282,8 +313,8 @@ export default function PollView() {
                     <p className="text-sm text-muted-foreground text-center py-4">
                       {isDatePoll
                         ? "Use the date picker above to suggest dates for the group to vote on."
-                        : isOwner
-                          ? "Use the dropdown above to add courses to this poll."
+                        : isOrganizer
+                          ? "Use the search above to add courses to this poll."
                           : "No course options have been added yet."}
                     </p>
                   ) : !hasVoted ? (
@@ -354,7 +385,7 @@ export default function PollView() {
                     </div>
                   )}
 
-                  {isOwner && poll.visibility === "live" && (
+                  {isOrganizer && poll.visibility === "live" && (
                     <div className="pt-4 border-t space-y-3">
                       <h4 className="text-sm font-medium">Organizer Actions</h4>
                       {isTied && totalVotes > 0 ? (

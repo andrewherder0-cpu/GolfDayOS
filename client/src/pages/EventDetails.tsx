@@ -16,12 +16,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthContext } from "@/lib/AuthProvider";
 import { apiRequest } from "@/lib/queryClient";
 import {
   Calendar, MapPin, Users, Vote, CheckCircle2, MessageSquare, Map,
-  ClipboardList, Settings, UserCog, Send, Mail, Crown, Shield, Clock, XCircle, UserCheck, Plus, Trash2,
+  ClipboardList, Settings, UserCog, Send, Mail, Crown, Shield, Clock, XCircle, UserCheck, Plus, Trash2, ChevronsUpDown,
 } from "lucide-react";
 import { useState } from "react";
 import { Progress } from "@/components/ui/progress";
@@ -96,6 +98,8 @@ export default function EventDetails() {
 
   const [newDateInputs, setNewDateInputs] = useState<Record<string, string>>({});
   const [selectedCourseIds, setSelectedCourseIds] = useState<Record<string, string>>({});
+  const [selectedCourseLabels, setSelectedCourseLabels] = useState<Record<string, string>>({});
+  const [coursePickerOpen, setCoursePickerOpen] = useState<Record<string, boolean>>({});
 
   const { data: event, isLoading } = useQuery<EventWithDetails>({
     queryKey: ["/api/events", eventId],
@@ -240,6 +244,7 @@ export default function EventDetails() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/polls/event", eventId] });
       setSelectedCourseIds(prev => ({ ...prev, [variables.pollId]: "" }));
+      setSelectedCourseLabels(prev => ({ ...prev, [variables.pollId]: "" }));
       toast({ title: "Course added to poll!" });
     },
     onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
@@ -514,38 +519,61 @@ export default function EventDetails() {
                             </div>
                           )}
 
-                          {/* Add course option (organizer only, course poll only) */}
+                          {/* Add course option (organizer only, course poll only) — searchable combobox */}
                           {!isDate && poll.visibility === "live" && isOrganizer && (
                             <div className="flex gap-2 items-center p-3 bg-muted/40 rounded-md">
                               <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
-                              <Select
-                                value={selectedCourseIds[poll.id] || ""}
-                                onValueChange={(val) => setSelectedCourseIds(prev => ({ ...prev, [poll.id]: val }))}
+                              <Popover
+                                open={coursePickerOpen[poll.id] ?? false}
+                                onOpenChange={(open) => setCoursePickerOpen(prev => ({ ...prev, [poll.id]: open }))}
                               >
-                                <SelectTrigger className="flex-1" data-testid={`select-course-tab-${poll.id}`}>
-                                  <SelectValue placeholder="Select a course to add..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {availableCourses.length === 0 ? (
-                                    <SelectItem value="_none" disabled>All courses already added</SelectItem>
-                                  ) : (
-                                    availableCourses.map(course => (
-                                      <SelectItem key={course.id} value={course.id}>
-                                        {course.name}{course.city ? ` — ${course.city}` : ""}
-                                      </SelectItem>
-                                    ))
-                                  )}
-                                </SelectContent>
-                              </Select>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    className="flex-1 justify-between font-normal"
+                                    data-testid={`button-course-picker-tab-${poll.id}`}
+                                  >
+                                    <span className={selectedCourseLabels[poll.id] ? "" : "text-muted-foreground"}>
+                                      {selectedCourseLabels[poll.id] || "Search for a course..."}
+                                    </span>
+                                    <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-80 p-0" align="start">
+                                  <Command>
+                                    <CommandInput placeholder="Search courses..." />
+                                    <CommandList>
+                                      <CommandEmpty>No courses found.</CommandEmpty>
+                                      {availableCourses.map(course => (
+                                        <CommandItem
+                                          key={course.id}
+                                          value={`${course.name} ${course.city ?? ""}`}
+                                          onSelect={() => {
+                                            setSelectedCourseIds(prev => ({ ...prev, [poll.id]: course.id }));
+                                            setSelectedCourseLabels(prev => ({ ...prev, [poll.id]: `${course.name}${course.city ? ` — ${course.city}` : ""}` }));
+                                            setCoursePickerOpen(prev => ({ ...prev, [poll.id]: false }));
+                                          }}
+                                          data-testid={`course-option-tab-${course.id}`}
+                                        >
+                                          <div>
+                                            <p className="text-sm font-medium">{course.name}</p>
+                                            {course.city && <p className="text-xs text-muted-foreground">{course.city}, {course.region}</p>}
+                                          </div>
+                                        </CommandItem>
+                                      ))}
+                                    </CommandList>
+                                  </Command>
+                                </PopoverContent>
+                              </Popover>
                               <Button
                                 size="sm"
                                 onClick={() => {
                                   const courseId = selectedCourseIds[poll.id];
-                                  if (courseId && courseId !== "_none") {
+                                  if (courseId) {
                                     addCourseOptionMutation.mutate({ pollId: poll.id, courseId });
                                   }
                                 }}
-                                disabled={!selectedCourseIds[poll.id] || selectedCourseIds[poll.id] === "_none" || addCourseOptionMutation.isPending}
+                                disabled={!selectedCourseIds[poll.id] || addCourseOptionMutation.isPending}
                                 data-testid={`button-add-course-tab-${poll.id}`}
                               >
                                 <Plus className="h-3 w-3 mr-1" />Add
