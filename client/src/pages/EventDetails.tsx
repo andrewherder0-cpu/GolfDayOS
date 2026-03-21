@@ -106,7 +106,6 @@ export default function EventDetails() {
 
   const canViewInvitations = !!event && (
     event.membership?.role === "owner" ||
-    event.createdBy === user?.id ||
     event.membership?.role === "organizer"
   );
 
@@ -676,7 +675,7 @@ export default function EventDetails() {
                 <div className="space-y-2">
                   {(event.members ?? []).map((member) => {
                     const rsvpStatus = getRsvpStatus(member.userId);
-                    const isCreator = member.userId === event.createdBy;
+                    const isCreator = member.role === "owner";
                     return (
                       <div
                         key={member.userId}
