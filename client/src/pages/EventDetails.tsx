@@ -221,10 +221,17 @@ export default function EventDetails() {
   const applyPollOptionMutation = useMutation({
     mutationFn: ({ pollId, optionId }: { pollId: string; optionId: string }) =>
       apiRequest("POST", `/api/polls/${pollId}/apply-result`, { winningOptionId: optionId }),
-    onSuccess: () => {
+    onSuccess: (data: { success: boolean; transitioned: boolean; newState: string }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/polls/event", eventId] });
       queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
-      toast({ title: "Poll result applied!" });
+      if (data.transitioned) {
+        toast({
+          title: "All polls resolved — RSVP is now open!",
+          description: "Members can now RSVP to the event.",
+        });
+      } else {
+        toast({ title: "Poll result applied and poll closed." });
+      }
     },
     onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
   });

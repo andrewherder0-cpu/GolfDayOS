@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link, useRoute } from "wouter";
+import { Link, useRoute, useLocation } from "wouter";
 import { Navigation } from "@/components/Navigation";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ export default function PollView() {
   const { user } = useAuthContext();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
 
   // Single-select: Record<pollId, optionId>
   const [selectedOption, setSelectedOption] = useState<Record<string, string>>({});
@@ -126,10 +127,18 @@ export default function PollView() {
   const applyResultMutation = useMutation({
     mutationFn: ({ pollId, winningOptionId }: { pollId: string; winningOptionId?: string }) =>
       apiRequest("POST", `/api/polls/${pollId}/apply-result`, { winningOptionId }),
-    onSuccess: () => {
+    onSuccess: (data: { success: boolean; transitioned: boolean; newState: string }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/polls/event", eventId] });
       queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
-      toast({ title: "Poll result applied!" });
+      if (data.transitioned) {
+        toast({
+          title: "All polls resolved — RSVP is now open!",
+          description: "Redirecting to the event page...",
+        });
+        setTimeout(() => setLocation(`/events/${eventId}`), 1200);
+      } else {
+        toast({ title: "Poll result applied and poll closed." });
+      }
     },
   });
 

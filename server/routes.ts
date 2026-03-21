@@ -1205,28 +1205,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No votes cast" });
       }
 
-      // Apply result
+      // Apply result to event
       if (poll.type === "course" && winner.courseId) {
         await storage.updateEvent(event.id, { chosenCourseId: winner.courseId });
       } else if (poll.type === "date" && winner.dateOption) {
         await storage.updateEvent(event.id, { chosenDate: winner.dateOption });
       }
 
+      // Auto-close this poll now that a result has been applied
+      await storage.updatePoll(poll.id, { visibility: "hidden" });
+
       await storage.createActivityLog({
         eventId: event.id,
         actorId: req.user!.id,
         action: "poll_result_applied",
-        payloadJson: JSON.stringify({ pollType: poll.type }),
+        payloadJson: JSON.stringify({ pollType: poll.type, winnerId: winner.id }),
       });
 
-      // Check if both course and date are chosen, transition to RSVP
+      // Check if all polls are now resolved → auto-advance to RSVP
       const updatedEvent = await storage.getEvent(event.id);
-      if (updatedEvent?.chosenCourseId && updatedEvent.chosenDate && updatedEvent.state === "polling") {
-        // Auto-transition to RSVP
-        // Note: In production, you might want to require manual RSVP opening
+      const allPolls = await storage.getEventPolls(event.id);
+
+      const allResolved = allPolls.length > 0 && allPolls.every((p) => {
+        if (p.type === "course") return !!updatedEvent?.chosenCourseId;
+        if (p.type === "date") return !!updatedEvent?.chosenDate;
+        return true;
+      });
+
+      let transitioned = false;
+      if (allResolved && updatedEvent?.state === "polling") {
+        await storage.updateEvent(event.id, { state: "rsvp" });
+        transitioned = true;
+        await storage.createActivityLog({
+          eventId: event.id,
+          actorId: req.user!.id,
+          action: "state_changed",
+          payloadJson: JSON.stringify({ from: "polling", to: "rsvp", reason: "all_polls_resolved" }),
+        });
       }
 
-      res.json({ success: true });
+      res.json({ success: true, transitioned, newState: transitioned ? "rsvp" : updatedEvent?.state });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
