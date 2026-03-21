@@ -76,19 +76,34 @@ export function NavBar() {
             </button>
           </div>
 
-          <Link href="/signup">
-            <Button
-              variant={isScrolled ? "default" : "outline"}
-              className={
-                isScrolled
-                  ? "bg-brand-600 hover:bg-brand-600/90 text-white"
-                  : "bg-white/10 backdrop-blur-sm text-white border-white/20 hover:bg-white/20"
-              }
-              data-testid="button-nav-signup"
-            >
-              Get Started
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/login">
+              <Button
+                variant="ghost"
+                className={
+                  isScrolled
+                    ? "text-foreground"
+                    : "text-white hover:bg-white/10"
+                }
+                data-testid="button-nav-login"
+              >
+                Log In
+              </Button>
+            </Link>
+            <Link href="/signup">
+              <Button
+                variant={isScrolled ? "default" : "outline"}
+                className={
+                  isScrolled
+                    ? "bg-brand-600 hover:bg-brand-600/90 text-white"
+                    : "bg-white/10 backdrop-blur-sm text-white border-white/20 hover:bg-white/20"
+                }
+                data-testid="button-nav-signup"
+              >
+                Get Started
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
     </motion.nav>
