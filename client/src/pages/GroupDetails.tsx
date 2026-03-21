@@ -75,7 +75,7 @@ export default function GroupDetails() {
   });
 
   const removeMemberMutation = useMutation({
-    mutationFn: async (userId: string) => {
+    mutationFn: async (userId: string): Promise<{ success: boolean }> => {
       const res = await apiRequest("DELETE", `/api/groups/${groupId}/members/${userId}`);
       return res.json();
     },
@@ -88,7 +88,7 @@ export default function GroupDetails() {
   });
 
   const deleteGroupMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (): Promise<{ success: boolean }> => {
       const res = await apiRequest("DELETE", `/api/groups/${groupId}`);
       return res.json();
     },

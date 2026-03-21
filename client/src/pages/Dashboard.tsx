@@ -37,11 +37,11 @@ export default function Dashboard() {
   });
 
   const joinGroupMutation = useMutation({
-    mutationFn: async (code: string) => {
+    mutationFn: async (code: string): Promise<{ id: string; name: string }> => {
       const res = await apiRequest("POST", `/api/groups/join/${code}`);
       return res.json();
     },
-    onSuccess: (data: any) => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/groups/mine"] });
       setJoinCode("");
       toast({ title: "Joined group!", description: `Welcome to ${data.name ?? "the group"}` });

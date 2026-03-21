@@ -117,7 +117,7 @@ export default function PollView() {
   });
 
   const deletePollOptionMutation = useMutation({
-    mutationFn: async (optionId: string) => {
+    mutationFn: async (optionId: string): Promise<{ success: boolean }> => {
       const res = await apiRequest("DELETE", `/api/polls/options/${optionId}`, undefined);
       return res.json();
     },

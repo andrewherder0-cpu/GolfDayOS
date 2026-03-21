@@ -165,11 +165,11 @@ export default function EventDetails() {
   });
 
   const deleteEventMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (): Promise<{ success: boolean; groupId?: string }> => {
       const res = await apiRequest("DELETE", `/api/events/${eventId}`);
       return res.json();
     },
-    onSuccess: (data: any) => {
+    onSuccess: (data) => {
       const groupId = data?.groupId ?? event?.groupId;
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
@@ -295,7 +295,7 @@ export default function EventDetails() {
   });
 
   const deletePollOptionMutation = useMutation({
-    mutationFn: async (optionId: string) => {
+    mutationFn: async (optionId: string): Promise<{ success: boolean }> => {
       const res = await apiRequest("DELETE", `/api/polls/options/${optionId}`, undefined);
       return res.json();
     },
