@@ -1,6 +1,4 @@
-import { useState, useEffect } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
-import L from "leaflet";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,32 +8,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { Search, MapPin, Phone, ExternalLink, Plus, X } from "lucide-react";
 import type { Course, Poll } from "@shared/schema";
 
-import "leaflet/dist/leaflet.css";
-
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-});
-
-const GTA_CENTER: [number, number] = [43.7615, -79.4111];
-const GTA_ZOOM = 10;
-
-function MapBoundsController({ courses }: { courses: Course[] }) {
-  const map = useMap();
-
-  useEffect(() => {
-    if (courses.length > 0) {
-      const valid = courses.filter(c => c.lat != null && c.lng != null);
-      if (valid.length > 0) {
-        const bounds = L.latLngBounds(valid.map(c => [c.lat!, c.lng!] as [number, number]));
-        map.fitBounds(bounds, { padding: [40, 40] });
-      }
-    }
-  }, []);
-
-  return null;
+interface MapConfig {
+  key: string;
 }
 
 interface CourseMapViewProps {
@@ -44,14 +18,55 @@ interface CourseMapViewProps {
   eventId?: string;
 }
 
-export function CourseMapView({ coursePoll, isOrganizer, eventId: _eventId }: CourseMapViewProps) {
+const GTA_CENTER = { lat: 43.7615, lng: -79.4111 };
+const GTA_ZOOM = 10;
+
+declare global {
+  interface Window {
+    google: typeof google;
+    initGolfMap?: () => void;
+  }
+}
+
+let mapsScriptPromise: Promise<void> | null = null;
+
+function loadGoogleMapsScript(apiKey: string): Promise<void> {
+  if (mapsScriptPromise) return mapsScriptPromise;
+  if (window.google?.maps) {
+    mapsScriptPromise = Promise.resolve();
+    return mapsScriptPromise;
+  }
+  mapsScriptPromise = new Promise<void>((resolve, reject) => {
+    window.initGolfMap = () => resolve();
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGolfMap`;
+    script.async = true;
+    script.defer = true;
+    script.onerror = () => reject(new Error("Failed to load Google Maps"));
+    document.head.appendChild(script);
+  });
+  return mapsScriptPromise;
+}
+
+export function CourseMapView({ coursePoll, isOrganizer }: CourseMapViewProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<google.maps.Map | null>(null);
+  const markersRef = useRef<Map<string, google.maps.Marker>>(new Map());
+  const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
+
   const [search, setSearch] = useState("");
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [mapsReady, setMapsReady] = useState(false);
+  const [mapsError, setMapsError] = useState<string | null>(null);
   const [addedCourseIds, setAddedCourseIds] = useState<Set<string>>(new Set());
 
-  const { data: courses = [], isLoading } = useQuery<Course[]>({
+  const { data: mapConfig } = useQuery<MapConfig>({
+    queryKey: ["/api/maps/config"],
+  });
+
+  const { data: courses = [], isLoading: coursesLoading } = useQuery<Course[]>({
     queryKey: ["/api/courses/map"],
   });
 
@@ -66,10 +81,105 @@ export function CourseMapView({ coursePoll, isOrganizer, eventId: _eventId }: Co
       }
       toast({ title: "Course added to poll" });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({ title: "Failed to add course", description: error.message, variant: "destructive" });
     },
   });
+
+  useEffect(() => {
+    if (!mapConfig?.key) return;
+    loadGoogleMapsScript(mapConfig.key)
+      .then(() => setMapsReady(true))
+      .catch(err => setMapsError(err.message));
+  }, [mapConfig?.key]);
+
+  const initMap = useCallback(() => {
+    if (!mapRef.current || !window.google?.maps || mapInstanceRef.current) return;
+    const map = new window.google.maps.Map(mapRef.current, {
+      center: GTA_CENTER,
+      zoom: GTA_ZOOM,
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: false,
+    });
+    mapInstanceRef.current = map;
+    infoWindowRef.current = new window.google.maps.InfoWindow();
+  }, []);
+
+  useEffect(() => {
+    if (mapsReady) initMap();
+  }, [mapsReady, initMap]);
+
+  const canAddToPoll = isOrganizer && coursePoll && coursePoll.visibility !== "hidden";
+
+  const buildInfoContent = useCallback((course: Course) => {
+    const tagsHtml = course.tags
+      .map(t => `<span style="font-size:11px;background:#f1f5f9;padding:1px 6px;border-radius:3px;margin-right:3px;">${t}</span>`)
+      .join("");
+    const addBtnId = `add-btn-${course.id}`;
+    const alreadyAdded = addedCourseIds.has(course.id);
+    const addBtn = canAddToPoll
+      ? `<button id="${addBtnId}" data-testid="button-add-to-poll-${course.id}" style="margin-top:8px;padding:5px 10px;background:#16a34a;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px;width:100%;">${alreadyAdded ? "Added" : "Add to Poll"}</button>`
+      : "";
+    return `
+      <div style="min-width:200px;max-width:240px;font-family:inherit;">
+        <p style="font-weight:600;font-size:13px;margin:0 0 4px;">${course.name}</p>
+        <p style="font-size:11px;color:#64748b;margin:0 0 6px;">${course.city}, ${course.region}</p>
+        ${course.feeNote ? `<p style="font-size:11px;color:#64748b;margin:0 0 4px;">${course.feeNote}</p>` : ""}
+        ${course.phone ? `<p style="font-size:11px;color:#64748b;margin:0 0 4px;">&#9742; ${course.phone}</p>` : ""}
+        <div style="margin-bottom:6px;">${tagsHtml}</div>
+        ${course.website ? `<a href="${course.website}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:#2563eb;">Website &rarr;</a>` : ""}
+        ${addBtn}
+      </div>
+    `;
+  }, [canAddToPoll, addedCourseIds]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const infoWindow = infoWindowRef.current;
+    if (!map || !infoWindow || !window.google?.maps) return;
+
+    const filtered = courses.filter(c => {
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return (
+        c.name.toLowerCase().includes(q) ||
+        c.city.toLowerCase().includes(q) ||
+        c.region.toLowerCase().includes(q) ||
+        c.tags.some(t => t.toLowerCase().includes(q))
+      );
+    });
+
+    markersRef.current.forEach(m => m.setMap(null));
+    markersRef.current.clear();
+
+    filtered.forEach(course => {
+      if (course.lat == null || course.lng == null) return;
+      const marker = new window.google.maps.Marker({
+        position: { lat: course.lat, lng: course.lng },
+        map,
+        title: course.name,
+      });
+
+      marker.addListener("click", () => {
+        setSelectedCourse(course);
+        infoWindow.setContent(buildInfoContent(course));
+        infoWindow.open(map, marker);
+
+        setTimeout(() => {
+          const btn = document.getElementById(`add-btn-${course.id}`);
+          if (btn && canAddToPoll && coursePoll && !addedCourseIds.has(course.id)) {
+            btn.onclick = () => {
+              addToPollMutation.mutate({ pollId: coursePoll.id, courseId: course.id });
+              infoWindow.close();
+            };
+          }
+        }, 100);
+      });
+
+      markersRef.current.set(course.id, marker);
+    });
+  }, [courses, search, mapsReady, buildInfoContent, canAddToPoll, coursePoll, addedCourseIds]);
 
   const filtered = courses.filter(c => {
     if (!search.trim()) return true;
@@ -82,14 +192,20 @@ export function CourseMapView({ coursePoll, isOrganizer, eventId: _eventId }: Co
     );
   });
 
-  const canAddToPoll = isOrganizer && coursePoll && coursePoll.visibility !== "hidden";
+  if (mapsError) {
+    return (
+      <div className="text-sm text-muted-foreground p-4 text-center">
+        Unable to load map: {mapsError}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-3">
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Filter courses by name or city..."
+          placeholder="Filter courses by name, city, or tags..."
           value={search}
           onChange={e => setSearch(e.target.value)}
           className="pl-10"
@@ -97,79 +213,17 @@ export function CourseMapView({ coursePoll, isOrganizer, eventId: _eventId }: Co
         />
       </div>
 
-      {isLoading ? (
-        <div className="h-80 flex items-center justify-center text-muted-foreground text-sm">
+      {(coursesLoading || !mapsReady) ? (
+        <div className="h-80 flex items-center justify-center text-muted-foreground text-sm border rounded-md bg-muted/20">
           Loading map...
         </div>
       ) : (
-        <div className="rounded-md overflow-hidden border" style={{ height: 380 }}>
-          <MapContainer
-            center={GTA_CENTER}
-            zoom={GTA_ZOOM}
-            style={{ height: "100%", width: "100%" }}
-            data-testid="course-map"
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            <MapBoundsController courses={filtered} />
-            {filtered.map(course => (
-              <Marker
-                key={course.id}
-                position={[course.lat!, course.lng!]}
-                eventHandlers={{ click: () => setSelectedCourse(course) }}
-              >
-                <Popup>
-                  <div style={{ minWidth: 200 }}>
-                    <p className="font-semibold text-sm mb-1">{course.name}</p>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1 mb-2">
-                      <MapPin className="h-3 w-3 inline" /> {course.city}, {course.region}
-                    </p>
-                    {course.feeNote && (
-                      <p className="text-xs text-muted-foreground mb-1">{course.feeNote}</p>
-                    )}
-                    {course.phone && (
-                      <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-                        <Phone className="h-3 w-3 inline" /> {course.phone}
-                      </p>
-                    )}
-                    <div className="flex gap-1 flex-wrap mb-2">
-                      {course.tags.map(tag => (
-                        <span key={tag} className="text-xs bg-muted px-1.5 py-0.5 rounded-sm">{tag}</span>
-                      ))}
-                    </div>
-                    <div className="flex gap-1 flex-wrap">
-                      {course.website && (
-                        <a
-                          href={course.website}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-primary flex items-center gap-1 hover:underline"
-                        >
-                          <ExternalLink className="h-3 w-3" />
-                          Website
-                        </a>
-                      )}
-                    </div>
-                    {canAddToPoll && (
-                      <Button
-                        size="sm"
-                        className="mt-2 w-full"
-                        disabled={addedCourseIds.has(course.id) || addToPollMutation.isPending}
-                        onClick={() => addToPollMutation.mutate({ pollId: coursePoll!.id, courseId: course.id })}
-                        data-testid={`button-add-to-poll-${course.id}`}
-                      >
-                        <Plus className="h-3 w-3 mr-1" />
-                        {addedCourseIds.has(course.id) ? "Added" : "Add to Poll"}
-                      </Button>
-                    )}
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
-          </MapContainer>
-        </div>
+        <div
+          ref={mapRef}
+          data-testid="course-map"
+          className="rounded-md border"
+          style={{ height: 380, width: "100%" }}
+        />
       )}
 
       {selectedCourse && (
@@ -194,7 +248,7 @@ export function CourseMapView({ coursePoll, isOrganizer, eventId: _eventId }: Co
             {selectedCourse.feeNote && <span>{selectedCourse.feeNote}</span>}
             {selectedCourse.phone && (
               <span className="flex items-center gap-1">
-                <Phone className="h-3 w-3" />{selectedCourse.phone}
+                <Phone className="h-3 w-3" /> {selectedCourse.phone}
               </span>
             )}
             {selectedCourse.website && (
@@ -208,12 +262,14 @@ export function CourseMapView({ coursePoll, isOrganizer, eventId: _eventId }: Co
               </a>
             )}
           </div>
-          {canAddToPoll && (
+          {canAddToPoll && coursePoll && (
             <Button
               size="sm"
               className="mt-3"
               disabled={addedCourseIds.has(selectedCourse.id) || addToPollMutation.isPending}
-              onClick={() => addToPollMutation.mutate({ pollId: coursePoll!.id, courseId: selectedCourse.id })}
+              onClick={() => {
+                addToPollMutation.mutate({ pollId: coursePoll.id, courseId: selectedCourse.id });
+              }}
               data-testid={`button-add-to-poll-detail-${selectedCourse.id}`}
             >
               <Plus className="h-3 w-3 mr-1" />
@@ -224,7 +280,7 @@ export function CourseMapView({ coursePoll, isOrganizer, eventId: _eventId }: Co
       )}
 
       <p className="text-xs text-muted-foreground">
-        Showing {filtered.length} of {courses.length} courses &middot; Map data &copy; OpenStreetMap contributors
+        Showing {filtered.length} of {courses.length} courses
       </p>
     </div>
   );

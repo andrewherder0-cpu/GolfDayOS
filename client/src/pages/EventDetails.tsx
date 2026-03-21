@@ -278,34 +278,32 @@ export default function EventDetails() {
                 </CardContent>
               </Card>
             )}
-          {/* Course Map */}
-          {(event.state === "draft" || event.state === "polling") && (
-            <Card className="mt-6">
-              <CardHeader
-                className="cursor-pointer flex flex-row items-center justify-between gap-1 pb-3"
-                onClick={() => setMapOpen(o => !o)}
-                data-testid="button-toggle-map"
-              >
-                <div>
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Map className="h-4 w-4" />
-                    GTA Course Map
-                  </CardTitle>
-                  <CardDescription className="mt-0.5">Browse local courses and add them to the course poll</CardDescription>
-                </div>
-                {mapOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />}
-              </CardHeader>
-              {mapOpen && (
-                <CardContent>
-                  <CourseMapView
-                    coursePoll={event.polls?.find(p => p.type === "course")}
-                    isOrganizer={isOwner}
-                    eventId={event.id}
-                  />
-                </CardContent>
-              )}
-            </Card>
-          )}
+          {/* Course Map - visible to all event members */}
+          <Card className="mt-6">
+            <CardHeader
+              className="cursor-pointer flex flex-row items-center justify-between gap-1 pb-3"
+              onClick={() => setMapOpen(o => !o)}
+              data-testid="button-toggle-map"
+            >
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Map className="h-4 w-4" />
+                  GTA Course Map
+                </CardTitle>
+                <CardDescription className="mt-0.5">Browse local courses and add them to the course poll</CardDescription>
+              </div>
+              {mapOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />}
+            </CardHeader>
+            {mapOpen && (
+              <CardContent>
+                <CourseMapView
+                  coursePoll={event.polls?.find(p => p.type === "course")}
+                  isOrganizer={isOwner}
+                  eventId={event.id}
+                />
+              </CardContent>
+            )}
+          </Card>
           </div>
 
           {/* Sidebar */}
