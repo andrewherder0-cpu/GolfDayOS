@@ -13,8 +13,9 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Copy, Plus, Users, Calendar, UserPlus, Send, Mail, Clock, Crown, Shield } from "lucide-react";
+import { Copy, Plus, Users, Calendar, UserPlus, Send, Mail, Clock, Crown, Shield, Trash2, X } from "lucide-react";
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useAuthContext } from "@/lib/AuthProvider";
 import type { Group, Event, User, Membership, Invitation } from "@shared/schema";
 
@@ -29,8 +30,11 @@ export default function GroupDetails() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { user: currentUser } = useAuthContext();
+  const [, setLocation] = useLocation();
   const [joinCodeDialogOpen, setJoinCodeDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [deleteGroupDialogOpen, setDeleteGroupDialogOpen] = useState(false);
+  const [removeMemberUserId, setRemoveMemberUserId] = useState<string | null>(null);
 
   const { data: group, isLoading } = useQuery<GroupWithDetails>({
     queryKey: ["/api/groups", groupId],
@@ -68,6 +72,32 @@ export default function GroupDetails() {
       toast({ title: "Role updated!" });
     },
     onError: (e: Error) => toast({ title: "Failed to update role", description: e.message, variant: "destructive" }),
+  });
+
+  const removeMemberMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await apiRequest("DELETE", `/api/groups/${groupId}/members/${userId}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId] });
+      setRemoveMemberUserId(null);
+      toast({ title: "Member removed from group" });
+    },
+    onError: (e: Error) => toast({ title: "Failed to remove member", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteGroupMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("DELETE", `/api/groups/${groupId}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+      toast({ title: "Group deleted" });
+      setLocation("/dashboard");
+    },
+    onError: (e: Error) => toast({ title: "Failed to delete group", description: e.message, variant: "destructive" }),
   });
 
   const copyJoinCode = () => {
@@ -254,20 +284,31 @@ export default function GroupDetails() {
                               Owner
                             </Badge>
                           ) : isOwner ? (
-                            <Select
-                              value={membership.role}
-                              onValueChange={(role) =>
-                                updateRoleMutation.mutate({ userId: membership.userId, role: role as "organizer" | "member" })
-                              }
-                            >
-                              <SelectTrigger className="h-7 text-xs w-28" data-testid={`select-role-${membership.userId}`}>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="organizer">Organizer</SelectItem>
-                                <SelectItem value="member">Member</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            <>
+                              <Select
+                                value={membership.role}
+                                onValueChange={(role) =>
+                                  updateRoleMutation.mutate({ userId: membership.userId, role: role as "organizer" | "member" })
+                                }
+                              >
+                                <SelectTrigger className="h-7 text-xs w-28" data-testid={`select-role-${membership.userId}`}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="organizer">Organizer</SelectItem>
+                                  <SelectItem value="member">Member</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 text-destructive hover:text-destructive"
+                                onClick={() => setRemoveMemberUserId(membership.userId)}
+                                data-testid={`button-remove-member-${membership.userId}`}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
                           ) : (
                             <Badge
                               variant="secondary"
@@ -284,6 +325,27 @@ export default function GroupDetails() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Delete Group (owner only) */}
+            {isOwner && (
+              <Card className="mt-4 border-destructive/40">
+                <CardHeader>
+                  <CardTitle className="text-base text-destructive">Danger Zone</CardTitle>
+                  <CardDescription>Permanently delete this group and all its events</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setDeleteGroupDialogOpen(true)}
+                    data-testid="button-delete-group"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Group
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Pending Invitations (owner only) */}
             {isOwner && pendingInvitations.length > 0 && (
@@ -317,6 +379,58 @@ export default function GroupDetails() {
               </Card>
             )}
           </div>
+
+          {/* Confirmation: Delete Group */}
+          <Dialog open={deleteGroupDialogOpen} onOpenChange={setDeleteGroupDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Delete Group</DialogTitle>
+                <DialogDescription>
+                  This will permanently delete <strong>{group.name}</strong> and all its events, polls, RSVPs, and pairings. This action cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex justify-end gap-3 pt-2">
+                <Button variant="outline" onClick={() => setDeleteGroupDialogOpen(false)}>Cancel</Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => deleteGroupMutation.mutate()}
+                  disabled={deleteGroupMutation.isPending}
+                  data-testid="button-confirm-delete-group"
+                >
+                  {deleteGroupMutation.isPending ? "Deleting..." : "Delete Group"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Confirmation: Remove Member */}
+          {removeMemberUserId && (
+            <Dialog open={!!removeMemberUserId} onOpenChange={() => setRemoveMemberUserId(null)}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Remove Member</DialogTitle>
+                  <DialogDescription>
+                    Are you sure you want to remove{" "}
+                    <strong>
+                      {group.members.find(m => m.userId === removeMemberUserId)?.user.name ?? "this member"}
+                    </strong>{" "}
+                    from the group? They will need a new join code or invitation to rejoin.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex justify-end gap-3 pt-2">
+                  <Button variant="outline" onClick={() => setRemoveMemberUserId(null)}>Cancel</Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => removeMemberMutation.mutate(removeMemberUserId)}
+                    disabled={removeMemberMutation.isPending}
+                    data-testid="button-confirm-remove-member"
+                  >
+                    {removeMemberMutation.isPending ? "Removing..." : "Remove Member"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
 
           {/* Events List */}
           <div className="lg:col-span-2">

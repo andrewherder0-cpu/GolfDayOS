@@ -1,11 +1,15 @@
-import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link, useLocation } from "wouter";
 import { Navigation } from "@/components/Navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Plus, Users, Calendar, MapPin } from "lucide-react";
+import { Plus, Users, Calendar, MapPin, LogIn } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 import type { Group, Event } from "@shared/schema";
 
 interface GroupWithDetails extends Group {
@@ -19,6 +23,11 @@ interface EventWithDetails extends Event {
 }
 
 export default function Dashboard() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const [joinCode, setJoinCode] = useState("");
+
   const { data: groups, isLoading: groupsLoading } = useQuery<GroupWithDetails[]>({
     queryKey: ["/api/groups/mine"],
   });
@@ -26,6 +35,27 @@ export default function Dashboard() {
   const { data: events, isLoading: eventsLoading } = useQuery<EventWithDetails[]>({
     queryKey: ["/api/events/upcoming"],
   });
+
+  const joinGroupMutation = useMutation({
+    mutationFn: async (code: string) => {
+      const res = await apiRequest("POST", `/api/groups/join/${code}`);
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/groups/mine"] });
+      setJoinCode("");
+      toast({ title: "Joined group!", description: `Welcome to ${data.name ?? "the group"}` });
+      if (data.id) setLocation(`/groups/${data.id}`);
+    },
+    onError: (e: Error) => {
+      toast({ title: "Could not join group", description: e.message, variant: "destructive" });
+    },
+  });
+
+  const handleJoin = () => {
+    const code = joinCode.trim().toUpperCase();
+    if (code.length >= 4) joinGroupMutation.mutate(code);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -39,7 +69,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* My Groups */}
           <div className="lg:col-span-1">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-4 gap-2">
               <h2 className="text-xl font-semibold" data-testid="text-my-groups">My Groups</h2>
               <Link href="/groups/new">
                 <a>
@@ -49,6 +79,28 @@ export default function Dashboard() {
                   </Button>
                 </a>
               </Link>
+            </div>
+
+            {/* Join Group inline */}
+            <div className="flex gap-2 mb-4">
+              <Input
+                placeholder="Enter join code..."
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === "Enter" && handleJoin()}
+                className="font-mono tracking-wider"
+                data-testid="input-join-code"
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleJoin}
+                disabled={joinCode.trim().length < 4 || joinGroupMutation.isPending}
+                data-testid="button-join-group"
+              >
+                <LogIn className="h-4 w-4 mr-1" />
+                {joinGroupMutation.isPending ? "Joining..." : "Join"}
+              </Button>
             </div>
 
             <div className="space-y-3">

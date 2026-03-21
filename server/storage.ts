@@ -62,12 +62,17 @@ export interface IStorage {
   getGroupByJoinCode(joinCode: string): Promise<Group | undefined>;
   createGroup(group: InsertGroup, ownerId: string): Promise<Group>;
   getUserGroups(userId: string): Promise<Group[]>;
+  deleteGroup(id: string): Promise<void>;
+
+  // Events (additional)
+  deleteEvent(id: string): Promise<void>;
 
   // Memberships
   getMembership(userId: string, groupId: string): Promise<Membership | undefined>;
   getGroupMemberships(groupId: string): Promise<Membership[]>;
   createMembership(membership: InsertMembership): Promise<Membership>;
   updateMembershipRole(userId: string, groupId: string, role: MembershipRole): Promise<Membership | undefined>;
+  deleteMembership(userId: string, groupId: string): Promise<void>;
 
   // Courses
   getCourse(id: string): Promise<Course | undefined>;
@@ -93,6 +98,7 @@ export interface IStorage {
   getPollOption(id: string): Promise<PollOption | undefined>;
   getPollOptions(pollId: string): Promise<PollOption[]>;
   createPollOption(option: InsertPollOption): Promise<PollOption>;
+  deletePollOption(id: string): Promise<void>;
 
   // Votes
   getVote(pollId: string, userId: string): Promise<Vote | undefined>;
@@ -287,6 +293,12 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
+  async deleteMembership(userId: string, groupId: string): Promise<void> {
+    await db.delete(memberships).where(
+      and(eq(memberships.userId, userId), eq(memberships.groupId, groupId))
+    );
+  }
+
   // Courses
   async getCourse(id: string): Promise<Course | undefined> {
     const [course] = await db.select().from(courses).where(eq(courses.id, id));
@@ -448,6 +460,40 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
+  async deleteEvent(id: string): Promise<void> {
+    // Cascade: pairings, rsvps, votes, poll options, polls, chat messages, activity logs
+    const eventPairings = await db.select({ id: pairings.id }).from(pairings).where(eq(pairings.eventId, id));
+    for (const p of eventPairings) {
+      await db.delete(pairingMembers).where(eq(pairingMembers.pairingId, p.id));
+    }
+    await db.delete(pairings).where(eq(pairings.eventId, id));
+    await db.delete(rsvps).where(eq(rsvps.eventId, id));
+    const eventPolls = await db.select({ id: polls.id }).from(polls).where(eq(polls.eventId, id));
+    for (const poll of eventPolls) {
+      const options = await db.select({ id: pollOptions.id }).from(pollOptions).where(eq(pollOptions.pollId, poll.id));
+      if (options.length > 0) {
+        await db.delete(votes).where(inArray(votes.optionId, options.map(o => o.id)));
+      }
+      await db.delete(votes).where(eq(votes.pollId, poll.id));
+      await db.delete(pollOptions).where(eq(pollOptions.pollId, poll.id));
+    }
+    await db.delete(polls).where(eq(polls.eventId, id));
+    await db.delete(chatMessages).where(eq(chatMessages.eventId, id));
+    await db.delete(activityLogs).where(eq(activityLogs.eventId, id));
+    await db.delete(events).where(eq(events.id, id));
+  }
+
+  async deleteGroup(id: string): Promise<void> {
+    // Cascade: all events and their children, invitations, memberships
+    const groupEvents = await db.select({ id: events.id }).from(events).where(eq(events.groupId, id));
+    for (const ev of groupEvents) {
+      await this.deleteEvent(ev.id);
+    }
+    await db.delete(invitations).where(eq(invitations.groupId, id));
+    await db.delete(memberships).where(eq(memberships.groupId, id));
+    await db.delete(groups).where(eq(groups.id, id));
+  }
+
   // Polls
   async getPoll(id: string): Promise<Poll | undefined> {
     const [poll] = await db.select().from(polls).where(eq(polls.id, id));
@@ -540,6 +586,11 @@ export class DatabaseStorage implements IStorage {
       ...option,
       createdAt: option.createdAt.toISOString(),
     };
+  }
+
+  async deletePollOption(id: string): Promise<void> {
+    await db.delete(votes).where(eq(votes.optionId, id));
+    await db.delete(pollOptions).where(eq(pollOptions.id, id));
   }
 
   // Votes

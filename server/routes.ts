@@ -421,6 +421,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== MEMBER REMOVAL =====
+  app.delete("/api/groups/:id/members/:userId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const group = await storage.getGroup(req.params.id);
+      if (!group) return res.status(404).json({ error: "Group not found" });
+
+      // Only owner can remove members
+      if (group.ownerId !== req.user!.id) {
+        return res.status(403).json({ error: "Only the group owner can remove members" });
+      }
+
+      // Cannot remove the owner
+      if (req.params.userId === group.ownerId) {
+        return res.status(400).json({ error: "Cannot remove the group owner" });
+      }
+
+      const membership = await storage.getMembership(req.params.userId, group.id);
+      if (!membership) return res.status(404).json({ error: "Member not found in group" });
+
+      await storage.deleteMembership(req.params.userId, group.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ===== GROUP DELETE =====
+  app.delete("/api/groups/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const group = await storage.getGroup(req.params.id);
+      if (!group) return res.status(404).json({ error: "Group not found" });
+
+      // Only owner can delete the group
+      if (group.ownerId !== req.user!.id) {
+        return res.status(403).json({ error: "Only the group owner can delete the group" });
+      }
+
+      await storage.deleteGroup(group.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   // ===== COURSE ROUTES =====
   app.get("/api/courses", requireAuth, async (req: Request, res: Response) => {
     try {
@@ -805,6 +849,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/polls/options/:optionId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const option = await storage.getPollOption(req.params.optionId);
+      if (!option) return res.status(404).json({ error: "Poll option not found" });
+
+      const poll = await storage.getPoll(option.pollId);
+      if (!poll) return res.status(404).json({ error: "Poll not found" });
+
+      // Only open polls can have options deleted
+      if (poll.visibility !== "live") {
+        return res.status(400).json({ error: "Cannot delete options from a closed poll" });
+      }
+
+      const event = await storage.getEvent(poll.eventId);
+      if (!event || !await isEventOrganizer(req.user!.id, event)) {
+        return res.status(403).json({ error: "Only event organizers can delete poll options" });
+      }
+
+      await storage.deletePollOption(option.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   // ===== EVENT ROUTES =====
   app.post("/api/events", requireAuth, async (req: Request, res: Response) => {
     try {
@@ -830,6 +899,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       res.json(event);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/events/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const event = await storage.getEvent(req.params.id);
+      if (!event) return res.status(404).json({ error: "Event not found" });
+
+      // Only the group owner can delete an event
+      const group = await storage.getGroup(event.groupId);
+      if (!group || group.ownerId !== req.user!.id) {
+        return res.status(403).json({ error: "Only the group owner can delete events" });
+      }
+
+      await storage.deleteEvent(event.id);
+      res.json({ success: true, groupId: event.groupId });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }

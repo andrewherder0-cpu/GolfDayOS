@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthContext } from "@/lib/AuthProvider";
 import { apiRequest } from "@/lib/queryClient";
-import { Vote, CheckCircle2, Calendar, MapPin, Plus, Trash2, ChevronsUpDown } from "lucide-react";
+import { Vote, CheckCircle2, Calendar, MapPin, Plus, Trash2, ChevronsUpDown, X } from "lucide-react";
 import type { Event, Group, Poll, PollOption, Vote as VoteType, Course, Membership } from "@shared/schema";
 
 interface PollWithDetails extends Poll {
@@ -112,6 +112,22 @@ export default function PollView() {
     },
     onError: (err: unknown) => {
       const msg = err instanceof Error ? err.message : "Could not delete poll";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    },
+  });
+
+  const deletePollOptionMutation = useMutation({
+    mutationFn: async (optionId: string) => {
+      const res = await apiRequest("DELETE", `/api/polls/options/${optionId}`, undefined);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/polls/event", eventId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
+      toast({ title: "Option removed" });
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Could not remove option";
       toast({ title: "Error", description: msg, variant: "destructive" });
     },
   });
@@ -396,6 +412,23 @@ export default function PollView() {
                               <span className="text-sm text-muted-foreground shrink-0">
                                 {option.voteCount} vote{option.voteCount !== 1 ? "s" : ""}
                               </span>
+                              {isOrganizer && poll.visibility === "live" && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="text-destructive hover:text-destructive h-8 w-8 shrink-0"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (confirm(`Remove "${option.label}" from this poll?`)) {
+                                      deletePollOptionMutation.mutate(option.id);
+                                    }
+                                  }}
+                                  disabled={deletePollOptionMutation.isPending}
+                                  data-testid={`button-delete-option-${option.id}`}
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
                             </div>
                             {hasVoted && (
                               <div className="mt-2">
@@ -444,6 +477,23 @@ export default function PollView() {
                                 </p>
                               )}
                             </Label>
+                            {isOrganizer && poll.visibility === "live" && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="text-destructive hover:text-destructive h-8 w-8 shrink-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm(`Remove "${option.label}" from this poll?`)) {
+                                    deletePollOptionMutation.mutate(option.id);
+                                  }
+                                }}
+                                disabled={deletePollOptionMutation.isPending}
+                                data-testid={`button-delete-option-${option.id}`}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
                           </div>
                         ))}
                       </RadioGroup>

@@ -23,7 +23,7 @@ import { useAuthContext } from "@/lib/AuthProvider";
 import { apiRequest } from "@/lib/queryClient";
 import {
   Calendar, MapPin, Users, Vote, CheckCircle2, MessageSquare, Map,
-  ClipboardList, Settings, UserCog, Send, Mail, Crown, Shield, Clock, XCircle, UserCheck, Plus, Trash2, ChevronsUpDown,
+  ClipboardList, Settings, UserCog, Send, Mail, Crown, Shield, Clock, XCircle, UserCheck, Plus, Trash2, ChevronsUpDown, X,
 } from "lucide-react";
 import { useState } from "react";
 import { Progress } from "@/components/ui/progress";
@@ -152,6 +152,7 @@ export default function EventDetails() {
   });
 
   const [closeRsvpDialogOpen, setCloseRsvpDialogOpen] = useState(false);
+  const [deleteEventDialogOpen, setDeleteEventDialogOpen] = useState(false);
 
   const finalizeMutation = useMutation({
     mutationFn: () => apiRequest("POST", `/api/events/${eventId}/finalize`, {}),
@@ -161,6 +162,25 @@ export default function EventDetails() {
       toast({ title: "RSVP closed!", description: "Player list is locked. You can now generate teams." });
     },
     onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
+  });
+
+  const deleteEventMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("DELETE", `/api/events/${eventId}`);
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      const groupId = data?.groupId ?? event?.groupId;
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+      toast({ title: "Event deleted" });
+      if (groupId) {
+        setLocation(`/groups/${groupId}`);
+      } else {
+        setLocation("/dashboard");
+      }
+    },
+    onError: (e: unknown) => toast({ title: "Failed to delete event", description: getErrorMessage(e), variant: "destructive" }),
   });
 
   const updateEventMutation = useMutation({
@@ -270,6 +290,19 @@ export default function EventDetails() {
       queryClient.invalidateQueries({ queryKey: ["/api/polls/event", eventId] });
       queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
       toast({ title: "Poll deleted" });
+    },
+    onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
+  });
+
+  const deletePollOptionMutation = useMutation({
+    mutationFn: async (optionId: string) => {
+      const res = await apiRequest("DELETE", `/api/polls/options/${optionId}`, undefined);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/polls/event", eventId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
+      toast({ title: "Option removed" });
     },
     onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
   });
@@ -649,18 +682,35 @@ export default function EventDetails() {
                                           <Progress value={pct} className="h-1.5" />
                                         </div>
                                       </div>
-                                      {isOrganizer && poll.visibility === "live" && (
-                                        <Button
-                                          size="sm"
-                                          variant={isLeading ? "default" : "outline"}
-                                          onClick={() => applyPollOptionMutation.mutate({ pollId: poll.id, optionId: opt.id })}
-                                          disabled={applyPollOptionMutation.isPending}
-                                          data-testid={`button-pick-${opt.id}`}
-                                          className="shrink-0"
-                                        >
-                                          <CheckCircle2 className="h-3 w-3 mr-1" />Pick This
-                                        </Button>
-                                      )}
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        {isOrganizer && poll.visibility === "live" && (
+                                          <Button
+                                            size="sm"
+                                            variant={isLeading ? "default" : "outline"}
+                                            onClick={() => applyPollOptionMutation.mutate({ pollId: poll.id, optionId: opt.id })}
+                                            disabled={applyPollOptionMutation.isPending}
+                                            data-testid={`button-pick-${opt.id}`}
+                                          >
+                                            <CheckCircle2 className="h-3 w-3 mr-1" />Pick This
+                                          </Button>
+                                        )}
+                                        {isOrganizer && poll.visibility === "live" && (
+                                          <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            className="text-destructive hover:text-destructive h-8 w-8"
+                                            onClick={() => {
+                                              if (confirm(`Remove "${label}" from this poll?`)) {
+                                                deletePollOptionMutation.mutate(opt.id);
+                                              }
+                                            }}
+                                            disabled={deletePollOptionMutation.isPending}
+                                            data-testid={`button-delete-option-${opt.id}`}
+                                          >
+                                            <X className="h-3.5 w-3.5" />
+                                          </Button>
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
                                 );
@@ -1456,6 +1506,26 @@ export default function EventDetails() {
                   </Card>
                 )}
 
+                {/* Delete Event (owner only) */}
+                {isOwner && (
+                  <Card className="border-destructive/40">
+                    <CardHeader>
+                      <CardTitle className="text-base text-destructive">Danger Zone</CardTitle>
+                      <CardDescription>Permanently delete this event and all related data</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setDeleteEventDialogOpen(true)}
+                        data-testid="button-delete-event"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />Delete Event
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Pending Invitations */}
                 {canViewInvitations && (
                   <Card>
@@ -1493,6 +1563,29 @@ export default function EventDetails() {
           )}
         </Tabs>
       </main>
+
+      {/* Delete Event confirmation dialog */}
+      <Dialog open={deleteEventDialogOpen} onOpenChange={setDeleteEventDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Event</DialogTitle>
+            <DialogDescription>
+              This will permanently delete <strong>{event?.title}</strong> along with all polls, RSVPs, pairings, and chat messages. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="outline" onClick={() => setDeleteEventDialogOpen(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteEventMutation.mutate()}
+              disabled={deleteEventMutation.isPending}
+              data-testid="button-confirm-delete-event"
+            >
+              {deleteEventMutation.isPending ? "Deleting..." : "Delete Event"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
