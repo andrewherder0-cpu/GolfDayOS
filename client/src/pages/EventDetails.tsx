@@ -307,7 +307,7 @@ export default function EventDetails() {
                 <CardDescription>Chat with your group about this event</CardDescription>
               </CardHeader>
               <CardContent className="flex-1 p-0 min-h-0">
-                <ChatView eventId={event.id} organizerId={event.createdBy} />
+                <ChatView eventId={event.id} />
               </CardContent>
             </Card>
           </div>

@@ -18,11 +18,11 @@ interface ChatMessageWithUser {
   createdAt: string;
   senderName: string;
   senderRole: string;
+  isOrganizer: boolean;
 }
 
 interface ChatViewProps {
   eventId: string;
-  organizerId: string;
 }
 
 function formatTime(isoString: string): string {
@@ -49,7 +49,7 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
-export function ChatView({ eventId, organizerId }: ChatViewProps) {
+export function ChatView({ eventId }: ChatViewProps) {
   const { user } = useAuthContext();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -59,10 +59,14 @@ export function ChatView({ eventId, organizerId }: ChatViewProps) {
 
   const { data: messages = [], isLoading } = useQuery<ChatMessageWithUser[]>({
     queryKey: ["/api/chat/event", eventId],
-    queryFn: () =>
-      fetch(`/api/chat/event/${eventId}`, { credentials: "include" }).then((r) =>
-        r.json()
-      ),
+    queryFn: async () => {
+      const res = await fetch(`/api/chat/event/${eventId}`, { credentials: "include" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Failed to load chat" }));
+        throw new Error(err.error ?? "Failed to load chat");
+      }
+      return res.json();
+    },
     refetchInterval: 3000,
     staleTime: 0,
   });
@@ -113,7 +117,7 @@ export function ChatView({ eventId, organizerId }: ChatViewProps) {
         ) : (
           messages.map((msg) => {
             const isOwn = msg.userId === user?.id;
-            const isOrganizer = msg.userId === organizerId;
+            const isOrganizer = msg.isOrganizer;
             return (
               <div
                 key={msg.id}

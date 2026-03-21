@@ -1213,6 +1213,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ...msg,
             senderName: sender?.name ?? "Unknown",
             senderRole: senderMembership?.role ?? "member",
+            isOrganizer: msg.userId === event.createdBy,
           };
         })
       );
@@ -1256,6 +1257,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...message,
         senderName: sender.name,
         senderRole: membership.role,
+        isOrganizer: message.userId === event.createdBy,
       });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
