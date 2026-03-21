@@ -64,6 +64,7 @@ export type InsertMembership = z.infer<typeof insertMembershipSchema>;
 export const courseSchema = z.object({
   id: z.string(),
   name: z.string(),
+  address: z.string().optional(),
   city: z.string(),
   region: z.string(),
   lat: z.number().optional(),
@@ -78,6 +79,7 @@ export const courseSchema = z.object({
 
 export const insertCourseSchema = z.object({
   name: z.string().min(1),
+  address: z.string().optional(),
   city: z.string().min(1),
   region: z.string().min(1),
   lat: z.number().optional(),

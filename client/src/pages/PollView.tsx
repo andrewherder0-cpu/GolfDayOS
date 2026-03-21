@@ -7,13 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthContext } from "@/lib/AuthProvider";
 import { apiRequest } from "@/lib/queryClient";
-import { Vote, CheckCircle2, Calendar, MapPin } from "lucide-react";
+import { Vote, CheckCircle2, Calendar, MapPin, Plus } from "lucide-react";
 import type { Event, Group, Poll, PollOption, Vote as VoteType, Course } from "@shared/schema";
 
 interface PollWithDetails extends Poll {
@@ -34,6 +35,7 @@ export default function PollView() {
   const { toast } = useToast();
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [tiebreakSelection, setTiebreakSelection] = useState<string>("");
+  const [newDateInputs, setNewDateInputs] = useState<Record<string, string>>({});
 
   const { data: event, isLoading } = useQuery<EventWithPolls>({
     queryKey: ["/api/polls/event", eventId],
@@ -46,6 +48,20 @@ export default function PollView() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/polls/event", eventId] });
       toast({ title: "Vote recorded!" });
+    },
+  });
+
+  const addDateOptionMutation = useMutation({
+    mutationFn: ({ pollId, dateOption }: { pollId: string; dateOption: string }) =>
+      apiRequest("POST", `/api/polls/${pollId}/options`, { dateOption }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/polls/event", eventId] });
+      setNewDateInputs(prev => ({ ...prev, [variables.pollId]: "" }));
+      toast({ title: "Date added to poll!" });
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Could not add date";
+      toast({ title: "Error", description: msg, variant: "destructive" });
     },
   });
 
@@ -87,10 +103,19 @@ export default function PollView() {
     }
   };
 
+  const handleAddDate = (pollId: string) => {
+    const dateStr = newDateInputs[pollId];
+    if (!dateStr) return;
+    addDateOptionMutation.mutate({ pollId, dateOption: dateStr });
+  };
+
   const getTopOptions = (poll: PollWithDetails) => {
     const maxVotes = Math.max(...poll.options.map((o) => o.voteCount));
     return poll.options.filter((o) => o.voteCount === maxVotes);
   };
+
+  // Get today in YYYY-MM-DD for min date input
+  const todayStr = new Date().toISOString().split("T")[0];
 
   return (
     <div className="min-h-screen bg-background">
@@ -116,25 +141,54 @@ export default function PollView() {
             const totalVotes = poll.options.reduce((sum, opt) => sum + opt.voteCount, 0);
             const topOptions = getTopOptions(poll);
             const isTied = topOptions.length > 1 && totalVotes > 0;
+            const isDatePoll = poll.type === "date";
 
             return (
               <Card key={poll.id} data-testid={`card-poll-${poll.type}`}>
                 <CardHeader>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
                     <div>
                       <CardTitle className="flex items-center gap-2">
-                        {poll.type === "course" ? <MapPin className="h-5 w-5" /> : <Calendar className="h-5 w-5" />}
-                        {poll.type === "course" ? "Choose a Course" : "Choose a Date"}
+                        {isDatePoll ? <Calendar className="h-5 w-5" /> : <MapPin className="h-5 w-5" />}
+                        {isDatePoll ? "Choose a Date" : "Choose a Course"}
                       </CardTitle>
                       <CardDescription>
-                        {hasVoted ? "You've voted" : "Select your preferred option"}
+                        {hasVoted ? "You've voted" : poll.options.length === 0 ? "No options yet — add dates below" : "Select your preferred option"}
                       </CardDescription>
                     </div>
                     {hasVoted && <CheckCircle2 className="h-6 w-6 text-green-600" />}
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {!hasVoted ? (
+
+                  {/* Add date option — shown to all members for date polls */}
+                  {isDatePoll && poll.visibility === "live" && (
+                    <div className="flex gap-2 items-center p-3 bg-muted/40 rounded-md">
+                      <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <Input
+                        type="date"
+                        min={todayStr}
+                        value={newDateInputs[poll.id] || ""}
+                        onChange={(e) => setNewDateInputs(prev => ({ ...prev, [poll.id]: e.target.value }))}
+                        className="flex-1"
+                        data-testid={`input-date-option-${poll.id}`}
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => handleAddDate(poll.id)}
+                        disabled={!newDateInputs[poll.id] || addDateOptionMutation.isPending}
+                        data-testid={`button-add-date-${poll.id}`}
+                      >
+                        <Plus className="h-3 w-3 mr-1" />Suggest Date
+                      </Button>
+                    </div>
+                  )}
+
+                  {poll.options.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      {isDatePoll ? "Use the date picker above to suggest dates for the group to vote on." : "No course options have been added yet."}
+                    </p>
+                  ) : !hasVoted ? (
                     <>
                       <RadioGroup
                         value={selectedOptions[poll.id] || ""}
@@ -204,7 +258,7 @@ export default function PollView() {
 
                   {isOwner && poll.visibility === "live" && (
                     <div className="pt-4 border-t space-y-3">
-                      <h4 className="text-sm font-medium">Owner Actions</h4>
+                      <h4 className="text-sm font-medium">Organizer Actions</h4>
                       {isTied && totalVotes > 0 ? (
                         <div className="space-y-3">
                           <p className="text-sm text-muted-foreground">
@@ -233,7 +287,7 @@ export default function PollView() {
                           </Button>
                         </div>
                       ) : (
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 flex-wrap">
                           <Button
                             variant="outline"
                             size="sm"

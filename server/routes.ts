@@ -714,10 +714,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Only event organizers can add poll options" });
       }
 
-      if (poll.type !== "course") {
-        return res.status(400).json({ error: "Can only add course options to a course poll" });
-      }
-
       if (poll.visibility === "hidden") {
         return res.status(400).json({ error: "Poll is closed" });
       }
@@ -726,30 +722,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Event must be in polling state" });
       }
 
-      const { courseId, label } = req.body;
-      if (!courseId && !label) {
-        return res.status(400).json({ error: "courseId or label required" });
+      if (poll.type === "course") {
+        const { courseId, label } = req.body;
+        if (!courseId && !label) {
+          return res.status(400).json({ error: "courseId or label required" });
+        }
+        if (courseId) {
+          const course = await storage.getCourse(courseId);
+          if (!course) return res.status(404).json({ error: "Course not found" });
+        }
+        const existing = await storage.getPollOptions(poll.id);
+        if (courseId && existing.some(o => o.courseId === courseId)) {
+          return res.status(400).json({ error: "Course already in this poll" });
+        }
+        const course = courseId ? await storage.getCourse(courseId) : undefined;
+        const option = await storage.createPollOption({
+          pollId: poll.id,
+          courseId: courseId || undefined,
+          dateOption: undefined,
+          label: label || course?.name || "",
+        });
+        return res.json(option);
       }
 
-      if (courseId) {
-        const course = await storage.getCourse(courseId);
-        if (!course) return res.status(404).json({ error: "Course not found" });
+      if (poll.type === "date") {
+        const { dateOption } = req.body;
+        if (!dateOption) {
+          return res.status(400).json({ error: "dateOption (ISO date string) required" });
+        }
+        const parsed = new Date(dateOption);
+        if (isNaN(parsed.getTime())) {
+          return res.status(400).json({ error: "Invalid date" });
+        }
+        // Store as YYYY-MM-DD (10 chars, fits varchar(20))
+        const dateStr = dateOption.split("T")[0].substring(0, 10);
+        const existing = await storage.getPollOptions(poll.id);
+        if (existing.some(o => o.dateOption === dateStr)) {
+          return res.status(400).json({ error: "This date is already in the poll" });
+        }
+        // Format a human-readable label
+        const [year, month, day] = dateStr.split("-").map(Number);
+        const displayDate = new Date(year, month - 1, day);
+        const label = displayDate.toLocaleDateString("en-CA", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+        const option = await storage.createPollOption({
+          pollId: poll.id,
+          courseId: undefined,
+          dateOption: dateStr,
+          label,
+        });
+        return res.json(option);
       }
 
-      const existing = await storage.getPollOptions(poll.id);
-      if (courseId && existing.some(o => o.courseId === courseId)) {
-        return res.status(400).json({ error: "Course already in this poll" });
-      }
-
-      const course = courseId ? await storage.getCourse(courseId) : undefined;
-      const option = await storage.createPollOption({
-        pollId: poll.id,
-        courseId: courseId || undefined,
-        dateOption: undefined,
-        label: label || course?.name || "",
-      });
-
-      res.json(option);
+      return res.status(400).json({ error: "Unknown poll type" });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Unknown error";
       res.status(400).json({ error: message });

@@ -31,7 +31,7 @@ export function CourseMapView({ coursePoll, isOrganizer }: CourseMapViewProps) {
     mutationFn: ({ pollId, courseId }: { pollId: string; courseId: string }) =>
       apiRequest("POST", `/api/polls/${pollId}/options`, { courseId }),
     onSuccess: (_data, vars) => {
-      setAddedCourseIds(prev => new Set([...prev, vars.courseId]));
+      setAddedCourseIds(prev => new Set(Array.from(prev).concat(vars.courseId)));
       if (coursePoll?.eventId) {
         queryClient.invalidateQueries({ queryKey: ["/api/polls/event", coursePoll.eventId] });
         queryClient.invalidateQueries({ queryKey: ["/api/events", coursePoll.eventId] });

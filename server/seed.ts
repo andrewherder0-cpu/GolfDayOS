@@ -48,7 +48,7 @@ function buildTags(c: CsvCourse): string[] {
   if (n.includes("resort")) tags.push("resort");
   if (n.includes("links")) tags.push("links");
   if (n.includes("stanley thompson")) tags.push("stanley-thompson");
-  return [...new Set(tags)];
+  return Array.from(new Set(tags));
 }
 
 function buildGeoQuery(c: CsvCourse): string {
@@ -59,6 +59,71 @@ function buildGeoQuery(c: CsvCourse): string {
   // Fall back to name + city for better accuracy than just city
   return `${c.name}, ${c.city}, Ontario, Canada`;
 }
+
+// Pre-geocoded coordinates keyed by course name (avoids API calls on each server start)
+const GEOCODED_COORDS: Record<string, { lat: number; lng: number }> = {
+  "4 Seasons Country Club": { lat: 43.960396, lng: -79.1151 },
+  "Angus Glen Golf Club (North Course)": { lat: 43.901997, lng: -79.32482 },
+  "Angus Glen Golf Club (South Course)": { lat: 43.901997, lng: -79.32482 },
+  "Bathurst Glen Golf Course": { lat: 43.92614, lng: -79.47816 },
+  "Bear Creek Golf Club": { lat: 44.32902, lng: -79.730865 },
+  "Bloomington Downs Golf Course": { lat: 43.967182, lng: -79.43109 },
+  "BraeBen Golf Course": { lat: 43.602013, lng: -79.69523 },
+  "Brantford Golf & Country Club": { lat: 43.16028, lng: -80.30316 },
+  "Burlington Golf & Country Club": { lat: 43.22619, lng: -79.95268 },
+  "Bushwood Golf Club": { lat: 43.943546, lng: -79.22022 },
+  "Caledon Country Club": { lat: 43.781044, lng: -79.92994 },
+  "Cambridge Golf Club": { lat: 43.387478, lng: -80.24747 },
+  "Cardinal 18 Golf Club": { lat: 44.291786, lng: -78.78817 },
+  "Cardinal Golf Club": { lat: 44.03664, lng: -79.56869 },
+  "Chedoke Golf Club": { lat: 43.26569, lng: -79.94888 },
+  "Conestoga Golf Club": { lat: 43.544994, lng: -80.49596 },
+  "Copper Creek Golf Club": { lat: 43.84772, lng: -79.63556 },
+  "Crosswinds Golf Course": { lat: 43.407345, lng: -79.921814 },
+  "Deer Creek Golf Club": { lat: 43.910522, lng: -79.023705 },
+  "Deerfield Golf Club": { lat: 43.41525, lng: -79.736336 },
+  "Dentonia Park Golf Course": { lat: 43.696415, lng: -79.29025 },
+  "Don Valley Golf Course": { lat: 43.748833, lng: -79.408485 },
+  "Doon Valley Golf Course": { lat: 43.397423, lng: -80.39231 },
+  "Dragon's Fire Golf Club": { lat: 43.168545, lng: -79.476715 },
+  "Glencairn Golf Club": { lat: 43.558617, lng: -79.940254 },
+  "Grand Niagara Golf": { lat: 43.042446, lng: -79.14106 },
+  "Grey Silo Golf Course": { lat: 43.510326, lng: -80.5469 },
+  "Guelph Lakes Golf & Country Club": { lat: 43.601353, lng: -80.22921 },
+  "Harmony Creek Golf Centre": { lat: 43.88898, lng: -78.81969 },
+  "Heritage Hills Golf Club": { lat: 44.430363, lng: -79.60986 },
+  "Humber Valley Golf Course": { lat: 43.727116, lng: -79.5457 },
+  "Innisbrook Golf Course": { lat: 44.326237, lng: -79.66335 },
+  "Innisfil Creek Golf Course": { lat: 44.20874, lng: -79.65808 },
+  "Kawartha Golf and Country Club": { lat: 44.286602, lng: -78.3572 },
+  "King's Forest Golf Club": { lat: 43.214294, lng: -79.81131 },
+  "Legends on the Niagara (Battlefield Course)": { lat: 43.047962, lng: -79.01968 },
+  "Legends on the Niagara (Ussher's Creek Course)": { lat: 43.047962, lng: -79.01968 },
+  "Lindsay Golf & Country Club": { lat: 44.338505, lng: -78.72467 },
+  "Lionhead Golf Club (Legends Course)": { lat: 43.642593, lng: -79.78905 },
+  "Lionhead Golf Club (Masters Course)": { lat: 43.642593, lng: -79.78905 },
+  "National Pines Golf Club": { lat: 44.321575, lng: -79.65483 },
+  "Niagara Falls Golf Club": { lat: 43.082684, lng: -79.16082 },
+  "Niagara National Golf & Country Club": { lat: 42.95853, lng: -79.02691 },
+  "Oakville Golf Club": { lat: 43.439636, lng: -79.746315 },
+  "Paris Grand Golf Club": { lat: 43.209522, lng: -80.375786 },
+  "Pickering Glen Golf Club": { lat: 43.921364, lng: -79.18699 },
+  "Pickering Golf Club": { lat: 43.88045, lng: -79.08018 },
+  "Richmond Hill Golf Club": { lat: 43.839333, lng: -79.45607 },
+  "Riverside Golf Club": { lat: 43.866486, lng: -79.07169 },
+  "Rockway Golf Course": { lat: 43.435623, lng: -80.459526 },
+  "Royal Ashburn Golf Club": { lat: 43.9979, lng: -79.009224 },
+  "Royal Ontario Golf Club": { lat: 43.540504, lng: -79.79368 },
+  "Sawmill Golf Course": { lat: 43.155148, lng: -79.10854 },
+  "St. Andrew's Valley Golf Club": { lat: 44.02193, lng: -79.456924 },
+  "St. Catharines Golf and Country Club": { lat: 43.15222, lng: -79.23243 },
+  "TPC Toronto at Osprey Valley": { lat: 43.946396, lng: -79.970375 },
+  "Tangle Creek Golf": { lat: 44.3235, lng: -79.75541 },
+  "The Nest Golf Club at Friday Harbour": { lat: 44.393284, lng: -79.53251 },
+  "Thundering Waters Golf Club": { lat: 43.066223, lng: -79.09235 },
+  "Victoria Park East Golf Club": { lat: 43.529236, lng: -80.19146 },
+  "Walter Gretzky Municipal Golf Course": { lat: 43.180565, lng: -80.294205 },
+};
 
 const CSV_COURSES: CsvCourse[] = [
   { name: "Lionhead Golf Club (Legends Course)", address: "8525 Mississauga Road", city: "Brampton", region: "ON", postalCode: "L6Y 0C1", weekdayFee: "$125-$165 (cart incl.)", weekendFee: "$125-$165 (cart incl.)", website: "kaneffgolf.com/golf/courses/lionhead/", phone: null, notes: "18-hole championship" },
@@ -142,15 +207,15 @@ export async function geocodeAndSeedCourses(): Promise<{ inserted: number; updat
 
       const courseData = {
         name: csvCourse.name,
-        address: csvCourse.address,
+        address: csvCourse.address ?? undefined,
         city: csvCourse.city,
         region: csvCourse.region,
         lat: geo?.lat ?? undefined,
         lng: geo?.lng ?? undefined,
         tags: buildTags(csvCourse),
-        feeNote: buildFeeNote(csvCourse),
-        website: normalizeWebsite(csvCourse.website),
-        phone: csvCourse.phone,
+        feeNote: buildFeeNote(csvCourse) ?? undefined,
+        website: normalizeWebsite(csvCourse.website) ?? undefined,
+        phone: csvCourse.phone ?? undefined,
         isActive: true,
       };
 
@@ -181,23 +246,40 @@ export async function geocodeAndSeedCourses(): Promise<{ inserted: number; updat
   return { inserted, updated, failed };
 }
 
-// Legacy startup seed — only inserts CSV courses if none exist yet (no geocoding, fast)
+// Startup seed — inserts CSV courses with pre-geocoded coordinates if none exist yet
 export async function seedGtaCourses(): Promise<void> {
   const existing = await storage.searchCourses();
-  if (existing.length > 0) return; // Already seeded
+  if (existing.length > 0) {
+    // Update any existing courses that are missing coordinates
+    let updated = 0;
+    for (const course of existing) {
+      if (!course.lat && GEOCODED_COORDS[course.name]) {
+        const coords = GEOCODED_COORDS[course.name];
+        await storage.updateCourse(course.id, { lat: coords.lat, lng: coords.lng });
+        updated++;
+      }
+    }
+    if (updated > 0) {
+      console.log(`[seed] Backfilled coordinates for ${updated} existing courses`);
+    }
+    return;
+  }
 
   let inserted = 0;
   for (const c of CSV_COURSES) {
     try {
+      const coords = GEOCODED_COORDS[c.name];
       await storage.createCourse({
         name: c.name,
-        address: c.address,
+        address: c.address ?? undefined,
         city: c.city,
         region: c.region,
+        lat: coords?.lat,
+        lng: coords?.lng,
         tags: buildTags(c),
-        feeNote: buildFeeNote(c),
-        website: normalizeWebsite(c.website),
-        phone: c.phone,
+        feeNote: buildFeeNote(c) ?? undefined,
+        website: normalizeWebsite(c.website) ?? undefined,
+        phone: c.phone ?? undefined,
         isActive: true,
       });
       inserted++;
@@ -206,6 +288,6 @@ export async function seedGtaCourses(): Promise<void> {
     }
   }
   if (inserted > 0) {
-    console.log(`[seed] Inserted ${inserted} courses from CSV (no geocoding — run /api/admin/reseed-courses to add coordinates)`);
+    console.log(`[seed] Inserted ${inserted} courses from CSV with pre-geocoded coordinates`);
   }
 }
