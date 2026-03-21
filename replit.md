@@ -8,17 +8,39 @@ Golf Day OS helps groups organize golf events with a complete workflow: draft cr
 
 ## Recent Changes
 
-- **March 21, 2026**: GTA Golf Course Map
+- **March 21, 2026**: Email Invitation Flow
+  - Added `POST /api/groups/:id/invite-email` route — any group member can invite by email
+  - Generates join URL (`/join/:joinCode`) and sends email stub (console log, ready for real email service)
+  - Updated GroupDetails "Invite Members" dialog: added "Send Email Invitation" section below join code display
+  - Email input (data-testid="input-invite-email") + Send button (data-testid="button-send-invite-email")
+  - Success toast on send; input cleared on success; error toast on failure
+  - End-to-end tested: invite dialog, email send, toast feedback all working
+
+- **March 21, 2026**: Tournament Detail Tabs
+  - Refactored EventDetails.tsx from two-column layout to Shadcn Tabs
+  - Tabs: Overview | Polls | RSVP | Course Map | Chat | Organizer (owner only)
+  - Default tab based on event state: draft → Overview, polling → Polls, rsvp/final → RSVP
+  - Overview tab: event details card + attendance status + quick-action sidebar cards
+  - Polls tab: active polls summary with View & Vote link; empty states for draft/closed
+  - RSVP tab: capacity bar, RSVP list link, pairings link (final state)
+  - Course Map tab: full CourseMapView with side list + iframe embed
+  - Chat tab: ChatView at 520px height
+  - Organizer tab: full lifecycle management controls (Open Polls → Open RSVP → Finalize)
+  - Fixed StatusBadge crash with poll.visibility values (now uses plain text span)
+  - End-to-end tested: all tabs render correctly, email invite works
+
+- **March 21, 2026**: GTA Golf Course Map (secure iframe architecture)
   - Added `phone` varchar field to courses table (schema + db:push)
   - Seeded 25 real Greater Toronto Area golf courses with accurate lat/lng, phone, website, tags, and fee notes
-  - Built `CourseMapView` React component using Leaflet + OpenStreetMap (no API key exposure)
-  - Interactive map centered on GTA with markers for each course (click → popup with details)
-  - Filter bar (data-testid="input-map-search") filters markers by name/city/tags
-  - "Add to Poll" button in popups — visible only to event organizers when course poll is active
-  - New API routes: GET /api/courses/map (returns courses with coordinates), POST /api/polls/:pollId/options (add course to poll), POST /api/seed/gta-courses (idempotent seed)
-  - Auto-seed on startup if no courses exist
-  - Integrated as collapsible "GTA Course Map" card in EventDetails for draft/polling events
-  - End-to-end tested: map loads, filter works, Add to Poll flow working
+  - Backend `GET /api/maps/frame` serves a complete HTML page with Google Maps JS API initialized server-side (API key NEVER in React bundle or frontend JS)
+  - CourseMapView component: left side list (filtered course names/cities) + right iframe embed
+  - Filter syncs between side list and iframe via postMessage (type: "filter", "focusCourse")
+  - Iframe → parent postMessage for "selectCourse" and "addToPoll" events
+  - "Add to Poll" button in selected course detail panel (data-testid="selected-course-detail") and in iframe info windows
+  - All info window content HTML-escaped (esc() function) to prevent XSS
+  - New API routes: GET /api/courses/map, GET /api/maps/frame, POST /api/polls/:pollId/options, POST /api/seed/gta-courses
+  - GTA Course Map card always visible to all event members (not state-restricted)
+  - End-to-end tested: side list, filter, course selection detail panel, Add to Poll all working
 
 - **March 21, 2026**: In-App Tournament Chat
   - Added `chatMessages` PostgreSQL table (event_id, user_id, content, created_at)

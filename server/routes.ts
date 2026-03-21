@@ -7,7 +7,7 @@ import Papa from "papaparse";
 import { storage } from "./storage";
 import { requireAuth } from "./middleware/auth";
 import { generateTeeSheetPDF } from "./utils/pdf";
-import { notifyPollOpened, notifyRsvpOpened, notifySpotAvailable, notifyRosterLocked, notifyTeeSheetPosted } from "./utils/email";
+import { notifyPollOpened, notifyRsvpOpened, notifySpotAvailable, notifyRosterLocked, notifyTeeSheetPosted, notifyGroupInvite } from "./utils/email";
 import { insertUserSchema, insertGroupSchema, insertCourseSchema, insertEventSchema, updateEventSchema } from "@shared/schema";
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -159,6 +159,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ joinCode: group.joinCode });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/groups/:id/invite-email", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const group = await storage.getGroup(req.params.id);
+      if (!group) return res.status(404).json({ error: "Group not found" });
+
+      const membership = await storage.getMembership(req.user!.id, group.id);
+      if (!membership) return res.status(403).json({ error: "Not a member of this group" });
+
+      const { email } = req.body;
+      if (!email || typeof email !== "string" || !email.includes("@")) {
+        return res.status(400).json({ error: "Valid email address required" });
+      }
+
+      const host = req.headers.host || "localhost:5000";
+      const protocol = req.headers["x-forwarded-proto"] || "http";
+      const joinUrl = `${protocol}://${host}/join/${group.joinCode}`;
+
+      notifyGroupInvite(email.trim(), req.user!.name, group.name, group.joinCode, joinUrl);
+      res.json({ success: true, message: `Invitation sent to ${email.trim()}` });
+    } catch (error: unknown) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Unknown error" });
     }
   });
 
@@ -393,12 +417,129 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/maps/config", requireAuth, (_req: Request, res: Response) => {
-    const key = process.env.GOOGLE_MAPS_API_KEY;
-    if (!key) {
-      return res.status(500).json({ error: "Maps API key not configured" });
+  app.get("/api/maps/frame", requireAuth, async (req: Request, res: Response) => {
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+    if (!apiKey) {
+      return res.status(500).send("<p>Maps API key not configured.</p>");
     }
-    res.json({ key });
+    const all = await storage.searchCourses();
+    const withCoords = all.filter(c => c.lat != null && c.lng != null);
+    const canAddToPoll = req.query.canAddToPoll === "1";
+    const pollId = typeof req.query.pollId === "string" ? req.query.pollId : "";
+    const coursesJson = JSON.stringify(withCoords.map(c => ({
+      id: c.id,
+      name: c.name,
+      city: c.city,
+      region: c.region,
+      lat: c.lat,
+      lng: c.lng,
+      feeNote: c.feeNote || "",
+      phone: c.phone || "",
+      website: c.website || "",
+      tags: c.tags,
+    })));
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; }
+    .add-btn { background:#16a34a; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:12px; padding:5px 10px; width:100%; margin-top:8px; }
+    .add-btn:disabled { opacity:.5; cursor:default; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    var COURSES = ${coursesJson};
+    var CAN_ADD = ${canAddToPoll ? "true" : "false"};
+    var POLL_ID = ${JSON.stringify(pollId)};
+    var ORIGIN = ${JSON.stringify(process.env.APP_ORIGIN || "")};
+    var map, markers = {}, infoWindow, activeFilter = "", addedIds = new Set();
+
+    function esc(s) {
+      return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+    }
+
+    function buildContent(c) {
+      var tags = c.tags.map(function(t){ return '<span style="font-size:11px;background:#f1f5f9;padding:1px 5px;border-radius:3px;margin-right:3px;">'+esc(t)+'</span>'; }).join("");
+      var btn = "";
+      if (CAN_ADD) {
+        var disabled = addedIds.has(c.id) ? "disabled" : "";
+        var label = addedIds.has(c.id) ? "Added" : "Add to Poll";
+        btn = '<button class="add-btn" id="abtn-'+esc(c.id)+'" '+disabled+'>'+esc(label)+'</button>';
+      }
+      return '<div style="min-width:190px;max-width:230px;font-family:sans-serif;">'
+        +'<p style="font-weight:600;font-size:13px;margin:0 0 3px;">'+esc(c.name)+'</p>'
+        +'<p style="font-size:11px;color:#64748b;margin:0 0 4px;">'+esc(c.city)+', '+esc(c.region)+'</p>'
+        +(c.feeNote ? '<p style="font-size:11px;color:#64748b;margin:0 0 3px;">'+esc(c.feeNote)+'</p>' : '')
+        +(c.phone ? '<p style="font-size:11px;color:#64748b;margin:0 0 3px;">&#9742; '+esc(c.phone)+'</p>' : '')
+        +'<div style="margin-bottom:6px;">'+tags+'</div>'
+        +(c.website ? '<a href="'+esc(c.website)+'" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:#2563eb;">Website &rarr;</a>' : '')
+        +btn+'</div>';
+    }
+
+    function openInfo(marker, course) {
+      infoWindow.setContent(buildContent(course));
+      infoWindow.open(map, marker);
+      window.parent.postMessage({ type: "selectCourse", courseId: course.id }, "*");
+      if (CAN_ADD) {
+        setTimeout(function() {
+          var btn = document.getElementById("abtn-" + course.id);
+          if (btn && !addedIds.has(course.id)) {
+            btn.onclick = function() {
+              window.parent.postMessage({ type: "addToPoll", courseId: course.id }, "*");
+              addedIds.add(course.id);
+              btn.textContent = "Added";
+              btn.disabled = true;
+            };
+          }
+        }, 80);
+      }
+    }
+
+    function renderMarkers() {
+      var q = activeFilter.toLowerCase();
+      Object.keys(markers).forEach(function(id) { markers[id].setMap(null); });
+      COURSES.forEach(function(c) {
+        if (q && !(c.name.toLowerCase().includes(q) || c.city.toLowerCase().includes(q) || c.region.toLowerCase().includes(q) || c.tags.some(function(t){ return t.toLowerCase().includes(q); }))) return;
+        if (!markers[c.id]) {
+          var m = new google.maps.Marker({ position: { lat: c.lat, lng: c.lng }, title: c.name });
+          m.addListener("click", (function(course){ return function(){ openInfo(m, course); }; })(c));
+          markers[c.id] = m;
+        }
+        markers[c.id].setMap(map);
+      });
+    }
+
+    function focusCourse(courseId) {
+      var c = COURSES.find(function(x){ return x.id === courseId; });
+      if (!c || !markers[c.id]) return;
+      map.panTo({ lat: c.lat, lng: c.lng });
+      map.setZoom(13);
+      openInfo(markers[c.id], c);
+    }
+
+    window.addEventListener("message", function(e) {
+      if (e.data && e.data.type === "filter") { activeFilter = e.data.query || ""; renderMarkers(); }
+      if (e.data && e.data.type === "focusCourse") { focusCourse(e.data.courseId); }
+    });
+
+    function initMap() {
+      map = new google.maps.Map(document.getElementById("map"), { center: { lat: 43.7615, lng: -79.4111 }, zoom: 10, mapTypeControl: false, streetViewControl: false, fullscreenControl: false });
+      infoWindow = new google.maps.InfoWindow();
+      renderMarkers();
+    }
+  </script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMap" async defer></script>
+</body>
+</html>`;
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    res.send(html);
   });
 
   app.get("/api/courses/map", requireAuth, async (_req: Request, res: Response) => {

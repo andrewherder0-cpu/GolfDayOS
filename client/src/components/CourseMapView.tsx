@@ -3,14 +3,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Search, MapPin, Phone, ExternalLink, Plus, X } from "lucide-react";
+import { Search, MapPin, Phone, ExternalLink, Plus } from "lucide-react";
 import type { Course, Poll } from "@shared/schema";
-
-interface MapConfig {
-  key: string;
-}
 
 interface CourseMapViewProps {
   coursePoll?: Poll;
@@ -18,55 +15,15 @@ interface CourseMapViewProps {
   eventId?: string;
 }
 
-const GTA_CENTER = { lat: 43.7615, lng: -79.4111 };
-const GTA_ZOOM = 10;
-
-declare global {
-  interface Window {
-    google: typeof google;
-    initGolfMap?: () => void;
-  }
-}
-
-let mapsScriptPromise: Promise<void> | null = null;
-
-function loadGoogleMapsScript(apiKey: string): Promise<void> {
-  if (mapsScriptPromise) return mapsScriptPromise;
-  if (window.google?.maps) {
-    mapsScriptPromise = Promise.resolve();
-    return mapsScriptPromise;
-  }
-  mapsScriptPromise = new Promise<void>((resolve, reject) => {
-    window.initGolfMap = () => resolve();
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGolfMap`;
-    script.async = true;
-    script.defer = true;
-    script.onerror = () => reject(new Error("Failed to load Google Maps"));
-    document.head.appendChild(script);
-  });
-  return mapsScriptPromise;
-}
-
 export function CourseMapView({ coursePoll, isOrganizer }: CourseMapViewProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<google.maps.Map | null>(null);
-  const markersRef = useRef<Map<string, google.maps.Marker>>(new Map());
-  const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
-
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const [search, setSearch] = useState("");
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
-  const [mapsReady, setMapsReady] = useState(false);
-  const [mapsError, setMapsError] = useState<string | null>(null);
   const [addedCourseIds, setAddedCourseIds] = useState<Set<string>>(new Set());
 
-  const { data: mapConfig } = useQuery<MapConfig>({
-    queryKey: ["/api/maps/config"],
-  });
-
-  const { data: courses = [], isLoading: coursesLoading } = useQuery<Course[]>({
+  const { data: courses = [] } = useQuery<Course[]>({
     queryKey: ["/api/courses/map"],
   });
 
@@ -86,100 +43,7 @@ export function CourseMapView({ coursePoll, isOrganizer }: CourseMapViewProps) {
     },
   });
 
-  useEffect(() => {
-    if (!mapConfig?.key) return;
-    loadGoogleMapsScript(mapConfig.key)
-      .then(() => setMapsReady(true))
-      .catch(err => setMapsError(err.message));
-  }, [mapConfig?.key]);
-
-  const initMap = useCallback(() => {
-    if (!mapRef.current || !window.google?.maps || mapInstanceRef.current) return;
-    const map = new window.google.maps.Map(mapRef.current, {
-      center: GTA_CENTER,
-      zoom: GTA_ZOOM,
-      mapTypeControl: false,
-      streetViewControl: false,
-      fullscreenControl: false,
-    });
-    mapInstanceRef.current = map;
-    infoWindowRef.current = new window.google.maps.InfoWindow();
-  }, []);
-
-  useEffect(() => {
-    if (mapsReady) initMap();
-  }, [mapsReady, initMap]);
-
   const canAddToPoll = isOrganizer && coursePoll && coursePoll.visibility !== "hidden";
-
-  const buildInfoContent = useCallback((course: Course) => {
-    const tagsHtml = course.tags
-      .map(t => `<span style="font-size:11px;background:#f1f5f9;padding:1px 6px;border-radius:3px;margin-right:3px;">${t}</span>`)
-      .join("");
-    const addBtnId = `add-btn-${course.id}`;
-    const alreadyAdded = addedCourseIds.has(course.id);
-    const addBtn = canAddToPoll
-      ? `<button id="${addBtnId}" data-testid="button-add-to-poll-${course.id}" style="margin-top:8px;padding:5px 10px;background:#16a34a;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px;width:100%;">${alreadyAdded ? "Added" : "Add to Poll"}</button>`
-      : "";
-    return `
-      <div style="min-width:200px;max-width:240px;font-family:inherit;">
-        <p style="font-weight:600;font-size:13px;margin:0 0 4px;">${course.name}</p>
-        <p style="font-size:11px;color:#64748b;margin:0 0 6px;">${course.city}, ${course.region}</p>
-        ${course.feeNote ? `<p style="font-size:11px;color:#64748b;margin:0 0 4px;">${course.feeNote}</p>` : ""}
-        ${course.phone ? `<p style="font-size:11px;color:#64748b;margin:0 0 4px;">&#9742; ${course.phone}</p>` : ""}
-        <div style="margin-bottom:6px;">${tagsHtml}</div>
-        ${course.website ? `<a href="${course.website}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:#2563eb;">Website &rarr;</a>` : ""}
-        ${addBtn}
-      </div>
-    `;
-  }, [canAddToPoll, addedCourseIds]);
-
-  useEffect(() => {
-    const map = mapInstanceRef.current;
-    const infoWindow = infoWindowRef.current;
-    if (!map || !infoWindow || !window.google?.maps) return;
-
-    const filtered = courses.filter(c => {
-      if (!search.trim()) return true;
-      const q = search.toLowerCase();
-      return (
-        c.name.toLowerCase().includes(q) ||
-        c.city.toLowerCase().includes(q) ||
-        c.region.toLowerCase().includes(q) ||
-        c.tags.some(t => t.toLowerCase().includes(q))
-      );
-    });
-
-    markersRef.current.forEach(m => m.setMap(null));
-    markersRef.current.clear();
-
-    filtered.forEach(course => {
-      if (course.lat == null || course.lng == null) return;
-      const marker = new window.google.maps.Marker({
-        position: { lat: course.lat, lng: course.lng },
-        map,
-        title: course.name,
-      });
-
-      marker.addListener("click", () => {
-        setSelectedCourse(course);
-        infoWindow.setContent(buildInfoContent(course));
-        infoWindow.open(map, marker);
-
-        setTimeout(() => {
-          const btn = document.getElementById(`add-btn-${course.id}`);
-          if (btn && canAddToPoll && coursePoll && !addedCourseIds.has(course.id)) {
-            btn.onclick = () => {
-              addToPollMutation.mutate({ pollId: coursePoll.id, courseId: course.id });
-              infoWindow.close();
-            };
-          }
-        }, 100);
-      });
-
-      markersRef.current.set(course.id, marker);
-    });
-  }, [courses, search, mapsReady, buildInfoContent, canAddToPoll, coursePoll, addedCourseIds]);
 
   const filtered = courses.filter(c => {
     if (!search.trim()) return true;
@@ -192,13 +56,37 @@ export function CourseMapView({ coursePoll, isOrganizer }: CourseMapViewProps) {
     );
   });
 
-  if (mapsError) {
-    return (
-      <div className="text-sm text-muted-foreground p-4 text-center">
-        Unable to load map: {mapsError}
-      </div>
-    );
-  }
+  const sendFilterToMap = useCallback((query: string) => {
+    iframeRef.current?.contentWindow?.postMessage({ type: "filter", query }, window.location.origin);
+  }, []);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearch(e.target.value);
+    sendFilterToMap(e.target.value);
+  };
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data as { type: string; courseId?: string };
+      if (data.type === "selectCourse" && data.courseId) {
+        const course = courses.find(c => c.id === data.courseId);
+        if (course) setSelectedCourse(course);
+      }
+      if (data.type === "addToPoll" && data.courseId && canAddToPoll && coursePoll) {
+        addToPollMutation.mutate({ pollId: coursePoll.id, courseId: data.courseId });
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [courses, canAddToPoll, coursePoll]);
+
+  const iframeSrc = (() => {
+    const params = new URLSearchParams();
+    if (coursePoll) params.set("pollId", coursePoll.id);
+    if (canAddToPoll) params.set("canAddToPoll", "1");
+    return `/api/maps/frame?${params.toString()}`;
+  })();
 
   return (
     <div className="flex flex-col gap-3">
@@ -207,38 +95,81 @@ export function CourseMapView({ coursePoll, isOrganizer }: CourseMapViewProps) {
         <Input
           placeholder="Filter courses by name, city, or tags..."
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={handleSearchChange}
           className="pl-10"
           data-testid="input-map-search"
         />
       </div>
 
-      {(coursesLoading || !mapsReady) ? (
-        <div className="h-80 flex items-center justify-center text-muted-foreground text-sm border rounded-md bg-muted/20">
-          Loading map...
+      <div className="flex gap-3" style={{ height: 420 }}>
+        {/* Side list */}
+        <div className="w-56 shrink-0 flex flex-col border rounded-md overflow-hidden">
+          <div className="px-3 py-2 border-b bg-muted/30 text-xs font-medium text-muted-foreground shrink-0">
+            {filtered.length} of {courses.length} courses
+          </div>
+          <ScrollArea className="flex-1">
+            <div className="p-1 space-y-0.5">
+              {filtered.map(course => (
+                <button
+                  key={course.id}
+                  className={`w-full text-left px-2 py-2 rounded-sm text-sm hover-elevate transition-colors ${
+                    selectedCourse?.id === course.id ? "bg-accent" : ""
+                  }`}
+                  onClick={() => {
+                    setSelectedCourse(course);
+                    iframeRef.current?.contentWindow?.postMessage(
+                      { type: "focusCourse", courseId: course.id },
+                      window.location.origin
+                    );
+                  }}
+                  data-testid={`list-course-${course.id}`}
+                >
+                  <div className="font-medium leading-tight truncate">{course.name}</div>
+                  <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                    <MapPin className="h-2.5 w-2.5 shrink-0" />
+                    <span className="truncate">{course.city}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </ScrollArea>
         </div>
-      ) : (
-        <div
-          ref={mapRef}
-          data-testid="course-map"
-          className="rounded-md border"
-          style={{ height: 380, width: "100%" }}
-        />
-      )}
 
+        {/* Map iframe */}
+        <div className="flex-1 border rounded-md overflow-hidden">
+          <iframe
+            ref={iframeRef}
+            src={iframeSrc}
+            title="GTA Golf Course Map"
+            data-testid="course-map"
+            style={{ width: "100%", height: "100%", border: "none" }}
+            sandbox="allow-scripts allow-same-origin"
+          />
+        </div>
+      </div>
+
+      {/* Selected course detail */}
       {selectedCourse && (
-        <div className="border rounded-md p-3 bg-muted/30 relative" data-testid="selected-course-detail">
-          <button
-            onClick={() => setSelectedCourse(null)}
-            className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
-          <h3 className="font-semibold text-sm mb-1">{selectedCourse.name}</h3>
-          <p className="text-xs text-muted-foreground flex items-center gap-1 mb-2">
-            <MapPin className="h-3 w-3" /> {selectedCourse.city}, {selectedCourse.region}
-          </p>
+        <div className="border rounded-md p-3 bg-muted/30" data-testid="selected-course-detail">
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <div>
+              <h3 className="font-semibold text-sm">{selectedCourse.name}</h3>
+              <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                <MapPin className="h-3 w-3" /> {selectedCourse.city}, {selectedCourse.region}
+              </p>
+            </div>
+            {canAddToPoll && coursePoll && (
+              <Button
+                size="sm"
+                disabled={addedCourseIds.has(selectedCourse.id) || addToPollMutation.isPending}
+                onClick={() => addToPollMutation.mutate({ pollId: coursePoll.id, courseId: selectedCourse.id })}
+                data-testid={`button-add-to-poll-detail-${selectedCourse.id}`}
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                {addedCourseIds.has(selectedCourse.id) ? "Added" : "Add to Poll"}
+              </Button>
+            )}
+          </div>
           <div className="flex flex-wrap gap-1 mb-2">
             {selectedCourse.tags.map(tag => (
               <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
@@ -262,26 +193,8 @@ export function CourseMapView({ coursePoll, isOrganizer }: CourseMapViewProps) {
               </a>
             )}
           </div>
-          {canAddToPoll && coursePoll && (
-            <Button
-              size="sm"
-              className="mt-3"
-              disabled={addedCourseIds.has(selectedCourse.id) || addToPollMutation.isPending}
-              onClick={() => {
-                addToPollMutation.mutate({ pollId: coursePoll.id, courseId: selectedCourse.id });
-              }}
-              data-testid={`button-add-to-poll-detail-${selectedCourse.id}`}
-            >
-              <Plus className="h-3 w-3 mr-1" />
-              {addedCourseIds.has(selectedCourse.id) ? "Added to Poll" : "Add to Course Poll"}
-            </Button>
-          )}
         </div>
       )}
-
-      <p className="text-xs text-muted-foreground">
-        Showing {filtered.length} of {courses.length} courses
-      </p>
     </div>
   );
 }

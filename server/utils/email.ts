@@ -57,3 +57,11 @@ export function notifyTeeSheetPosted(to: string, eventTitle: string): void {
     `The tee sheet for ${eventTitle} is now available. Download it from Golf Day OS!`
   );
 }
+
+export function notifyGroupInvite(to: string, inviterName: string, groupName: string, joinCode: string, joinUrl: string): void {
+  sendEmail(
+    to,
+    `You're invited to join ${groupName} on Golf Day OS`,
+    `${inviterName} has invited you to join "${groupName}" on Golf Day OS.\n\nUse this join code to join: ${joinCode}\n\nOr click this link: ${joinUrl}\n\nGolf Day OS helps groups organize golf events with course polls, RSVPs, and tee sheet management.`
+  );
+}

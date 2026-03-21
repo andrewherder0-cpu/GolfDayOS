@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Copy, Plus, Users, Calendar, UserPlus } from "lucide-react";
+import { Copy, Plus, Users, Calendar, UserPlus, Send } from "lucide-react";
 import { useState } from "react";
 import type { Group, Event, User, Membership } from "@shared/schema";
 
@@ -26,6 +26,7 @@ export default function GroupDetails() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [joinCodeDialogOpen, setJoinCodeDialogOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
 
   const { data: group, isLoading } = useQuery<GroupWithDetails>({
     queryKey: ["/api/groups", groupId],
@@ -34,9 +35,21 @@ export default function GroupDetails() {
 
   const generateInviteMutation = useMutation({
     mutationFn: () => apiRequest<{ joinCode: string }>("POST", `/api/groups/${groupId}/invite`, {}),
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId] });
       toast({ title: "Invite code refreshed!" });
+    },
+  });
+
+  const sendEmailInviteMutation = useMutation({
+    mutationFn: (email: string) =>
+      apiRequest("POST", `/api/groups/${groupId}/invite-email`, { email }),
+    onSuccess: (_data, email) => {
+      toast({ title: "Invitation sent!", description: `An invite was sent to ${email}` });
+      setInviteEmail("");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to send invite", description: error.message, variant: "destructive" });
     },
   });
 
@@ -111,12 +124,12 @@ export default function GroupDetails() {
                     <DialogHeader>
                       <DialogTitle>Invite Members</DialogTitle>
                       <DialogDescription>
-                        Share this join code with others to invite them to the group
+                        Share the join code or send a direct email invitation
                       </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4">
+                    <div className="space-y-5">
                       <div>
-                        <Label>Join Code</Label>
+                        <Label className="text-sm font-medium">Join Code</Label>
                         <div className="flex items-center gap-2 mt-2">
                           <Input
                             value={group.joinCode}
@@ -124,14 +137,44 @@ export default function GroupDetails() {
                             className="font-mono tracking-wider"
                             data-testid="input-join-code-display"
                           />
-                          <Button onClick={copyJoinCode} data-testid="button-copy-code-dialog">
+                          <Button size="icon" variant="outline" onClick={copyJoinCode} data-testid="button-copy-code-dialog">
                             <Copy className="h-4 w-4" />
                           </Button>
                         </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Members enter this code on the Join Group page
+                        </p>
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        Members can join by entering this code on the join group page
-                      </p>
+
+                      <div className="border-t pt-4">
+                        <Label htmlFor="invite-email" className="text-sm font-medium">Send Email Invitation</Label>
+                        <div className="flex items-center gap-2 mt-2">
+                          <Input
+                            id="invite-email"
+                            type="email"
+                            placeholder="friend@example.com"
+                            value={inviteEmail}
+                            onChange={e => setInviteEmail(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter" && inviteEmail) {
+                                sendEmailInviteMutation.mutate(inviteEmail);
+                              }
+                            }}
+                            data-testid="input-invite-email"
+                          />
+                          <Button
+                            onClick={() => sendEmailInviteMutation.mutate(inviteEmail)}
+                            disabled={!inviteEmail || sendEmailInviteMutation.isPending}
+                            data-testid="button-send-invite-email"
+                          >
+                            <Send className="h-4 w-4 mr-1" />
+                            {sendEmailInviteMutation.isPending ? "Sending..." : "Send"}
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          They'll receive the join code and a direct link to join
+                        </p>
+                      </div>
                     </div>
                   </DialogContent>
                 </Dialog>
