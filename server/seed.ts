@@ -60,69 +60,69 @@ function buildGeoQuery(c: CsvCourse): string {
   return `${c.name}, ${c.city}, Ontario, Canada`;
 }
 
-// Pre-geocoded coordinates keyed by course name (avoids API calls on each server start)
+// Pre-geocoded coordinates keyed by course name (updated from verified CSV data)
 const GEOCODED_COORDS: Record<string, { lat: number; lng: number }> = {
-  "4 Seasons Country Club": { lat: 43.960396, lng: -79.1151 },
-  "Angus Glen Golf Club (North Course)": { lat: 43.901997, lng: -79.32482 },
-  "Angus Glen Golf Club (South Course)": { lat: 43.901997, lng: -79.32482 },
-  "Bathurst Glen Golf Course": { lat: 43.92614, lng: -79.47816 },
-  "Bear Creek Golf Club": { lat: 44.32902, lng: -79.730865 },
-  "Bloomington Downs Golf Course": { lat: 43.967182, lng: -79.43109 },
-  "BraeBen Golf Course": { lat: 43.602013, lng: -79.69523 },
-  "Brantford Golf & Country Club": { lat: 43.16028, lng: -80.30316 },
-  "Burlington Golf & Country Club": { lat: 43.22619, lng: -79.95268 },
-  "Bushwood Golf Club": { lat: 43.943546, lng: -79.22022 },
-  "Caledon Country Club": { lat: 43.781044, lng: -79.92994 },
-  "Cambridge Golf Club": { lat: 43.387478, lng: -80.24747 },
-  "Cardinal 18 Golf Club": { lat: 44.291786, lng: -78.78817 },
-  "Cardinal Golf Club": { lat: 44.03664, lng: -79.56869 },
-  "Chedoke Golf Club": { lat: 43.26569, lng: -79.94888 },
-  "Conestoga Golf Club": { lat: 43.544994, lng: -80.49596 },
-  "Copper Creek Golf Club": { lat: 43.84772, lng: -79.63556 },
-  "Crosswinds Golf Course": { lat: 43.407345, lng: -79.921814 },
-  "Deer Creek Golf Club": { lat: 43.910522, lng: -79.023705 },
-  "Deerfield Golf Club": { lat: 43.41525, lng: -79.736336 },
-  "Dentonia Park Golf Course": { lat: 43.696415, lng: -79.29025 },
-  "Don Valley Golf Course": { lat: 43.748833, lng: -79.408485 },
-  "Doon Valley Golf Course": { lat: 43.397423, lng: -80.39231 },
-  "Dragon's Fire Golf Club": { lat: 43.168545, lng: -79.476715 },
-  "Glencairn Golf Club": { lat: 43.558617, lng: -79.940254 },
-  "Grand Niagara Golf": { lat: 43.042446, lng: -79.14106 },
-  "Grey Silo Golf Course": { lat: 43.510326, lng: -80.5469 },
-  "Guelph Lakes Golf & Country Club": { lat: 43.601353, lng: -80.22921 },
-  "Harmony Creek Golf Centre": { lat: 43.88898, lng: -78.81969 },
-  "Heritage Hills Golf Club": { lat: 44.430363, lng: -79.60986 },
-  "Humber Valley Golf Course": { lat: 43.727116, lng: -79.5457 },
-  "Innisbrook Golf Course": { lat: 44.326237, lng: -79.66335 },
-  "Innisfil Creek Golf Course": { lat: 44.20874, lng: -79.65808 },
-  "Kawartha Golf and Country Club": { lat: 44.286602, lng: -78.3572 },
-  "King's Forest Golf Club": { lat: 43.214294, lng: -79.81131 },
-  "Legends on the Niagara (Battlefield Course)": { lat: 43.047962, lng: -79.01968 },
-  "Legends on the Niagara (Ussher's Creek Course)": { lat: 43.047962, lng: -79.01968 },
-  "Lindsay Golf & Country Club": { lat: 44.338505, lng: -78.72467 },
-  "Lionhead Golf Club (Legends Course)": { lat: 43.642593, lng: -79.78905 },
-  "Lionhead Golf Club (Masters Course)": { lat: 43.642593, lng: -79.78905 },
-  "National Pines Golf Club": { lat: 44.321575, lng: -79.65483 },
-  "Niagara Falls Golf Club": { lat: 43.082684, lng: -79.16082 },
-  "Niagara National Golf & Country Club": { lat: 42.95853, lng: -79.02691 },
-  "Oakville Golf Club": { lat: 43.439636, lng: -79.746315 },
-  "Paris Grand Golf Club": { lat: 43.209522, lng: -80.375786 },
-  "Pickering Glen Golf Club": { lat: 43.921364, lng: -79.18699 },
-  "Pickering Golf Club": { lat: 43.88045, lng: -79.08018 },
-  "Richmond Hill Golf Club": { lat: 43.839333, lng: -79.45607 },
-  "Riverside Golf Club": { lat: 43.866486, lng: -79.07169 },
-  "Rockway Golf Course": { lat: 43.435623, lng: -80.459526 },
-  "Royal Ashburn Golf Club": { lat: 43.9979, lng: -79.009224 },
-  "Royal Ontario Golf Club": { lat: 43.540504, lng: -79.79368 },
-  "Sawmill Golf Course": { lat: 43.155148, lng: -79.10854 },
-  "St. Andrew's Valley Golf Club": { lat: 44.02193, lng: -79.456924 },
-  "St. Catharines Golf and Country Club": { lat: 43.15222, lng: -79.23243 },
-  "TPC Toronto at Osprey Valley": { lat: 43.946396, lng: -79.970375 },
-  "Tangle Creek Golf": { lat: 44.3235, lng: -79.75541 },
-  "The Nest Golf Club at Friday Harbour": { lat: 44.393284, lng: -79.53251 },
-  "Thundering Waters Golf Club": { lat: 43.066223, lng: -79.09235 },
-  "Victoria Park East Golf Club": { lat: 43.529236, lng: -80.19146 },
-  "Walter Gretzky Municipal Golf Course": { lat: 43.180565, lng: -80.294205 },
+  "4 Seasons Country Club": { lat: 43.9313625, lng: -78.5548831 },
+  "Angus Glen Golf Club (North Course)": { lat: 43.9020569, lng: -79.3386868 },
+  "Angus Glen Golf Club (South Course)": { lat: 43.9020569, lng: -79.3386868 },
+  "Bathurst Glen Golf Course": { lat: 43.9277562, lng: -79.4715543 },
+  "Bear Creek Golf Club": { lat: 44.4256710, lng: -79.6948258 },
+  "Bloomington Downs Golf Course": { lat: 43.9647759, lng: -79.4251044 },
+  "BraeBen Golf Course": { lat: 43.5994044, lng: -79.6965884 },
+  "Brantford Golf & Country Club": { lat: 43.1619315, lng: -80.3037926 },
+  "Burlington Golf & Country Club": { lat: 43.3957325, lng: -79.8981942 },
+  "Bushwood Golf Club": { lat: 43.9451651, lng: -79.2179728 },
+  "Caledon Country Club": { lat: 43.7858823, lng: -79.9265565 },
+  "Cambridge Golf Club": { lat: 43.3811657, lng: -80.2444778 },
+  "Cardinal 18 Golf Club": { lat: 44.3383554, lng: -78.7213848 },
+  "Cardinal Golf Club": { lat: 44.0405399, lng: -79.5691468 },
+  "Chedoke Golf Club": { lat: 43.2492335, lng: -79.9125336 },
+  "Conestoga Golf Club": { lat: 43.5464667, lng: -80.4991738 },
+  "Copper Creek Golf Club": { lat: 43.8586577, lng: -79.6373950 },
+  "Crosswinds Golf Course": { lat: 43.4466837, lng: -79.9127192 },
+  "Deer Creek Golf Club": { lat: 43.9091394, lng: -79.0247631 },
+  "Deerfield Golf Club": { lat: 43.4184182, lng: -79.7391921 },
+  "Dentonia Park Golf Course": { lat: 43.6976376, lng: -79.2893596 },
+  "Don Valley Golf Course": { lat: 43.7473872, lng: -79.4114093 },
+  "Doon Valley Golf Course": { lat: 43.3941344, lng: -80.3985142 },
+  "Dragon's Fire Golf Club": { lat: 43.3813912, lng: -79.9529441 },
+  "Glencairn Golf Club": { lat: 43.5608885, lng: -79.9421639 },
+  "Grand Niagara Golf": { lat: 43.0360796, lng: -79.1309337 },
+  "Grey Silo Golf Course": { lat: 43.5201558, lng: -80.4752443 },
+  "Guelph Lakes Golf & Country Club": { lat: 43.5977678, lng: -80.2275118 },
+  "Harmony Creek Golf Centre": { lat: 43.8891097, lng: -78.8193516 },
+  "Heritage Hills Golf Club": { lat: 44.4256710, lng: -79.6948258 },
+  "Humber Valley Golf Course": { lat: 43.7245208, lng: -79.5445896 },
+  "Innisbrook Golf Course": { lat: 44.3252571, lng: -79.6624110 },
+  "Innisfil Creek Golf Course": { lat: 44.3000, lng: -79.6500 },
+  "Kawartha Golf and Country Club": { lat: 44.3314915, lng: -78.3057714 },
+  "King's Forest Golf Club": { lat: 43.2148249, lng: -79.8091626 },
+  "Legends on the Niagara (Battlefield Course)": { lat: 43.1289116, lng: -79.0662540 },
+  "Legends on the Niagara (Ussher's Creek Course)": { lat: 43.1289116, lng: -79.0662540 },
+  "Lindsay Golf & Country Club": { lat: 44.3383554, lng: -78.7213848 },
+  "Lionhead Golf Club (Legends Course)": { lat: 43.6278607, lng: -79.7761767 },
+  "Lionhead Golf Club (Masters Course)": { lat: 43.6278607, lng: -79.7761767 },
+  "National Pines Golf Club": { lat: 44.3232794, lng: -79.6538148 },
+  "Niagara Falls Golf Club": { lat: 43.0829762, lng: -79.1553127 },
+  "Niagara National Golf & Country Club": { lat: 43.1289116, lng: -79.0662540 },
+  "Oakville Golf Club": { lat: 43.4560377, lng: -79.7013398 },
+  "Paris Grand Golf Club": { lat: 43.2081168, lng: -80.3771096 },
+  "Pickering Glen Golf Club": { lat: 43.9672508, lng: -79.0360449 },
+  "Pickering Golf Club": { lat: 43.9672508, lng: -79.0360449 },
+  "Richmond Hill Golf Club": { lat: 43.8390480, lng: -79.4550000 },
+  "Riverside Golf Club": { lat: 43.9091394, lng: -79.0247631 },
+  "Rockway Golf Course": { lat: 43.4346856, lng: -80.4698923 },
+  "Royal Ashburn Golf Club": { lat: 43.9672508, lng: -79.0360449 },
+  "Royal Ontario Golf Club": { lat: 43.5408787, lng: -79.7972491 },
+  "Sawmill Golf Course": { lat: 43.0829762, lng: -79.1553127 },
+  "St. Andrew's Valley Golf Club": { lat: 43.9647759, lng: -79.4251044 },
+  "St. Catharines Golf and Country Club": { lat: 43.1567109, lng: -79.2376054 },
+  "TPC Toronto at Osprey Valley": { lat: 43.8478111, lng: -80.0389348 },
+  "Tangle Creek Golf": { lat: 44.3228176, lng: -79.7565527 },
+  "The Nest Golf Club at Friday Harbour": { lat: 44.3252571, lng: -79.6624110 },
+  "Thundering Waters Golf Club": { lat: 43.0608224, lng: -79.0916211 },
+  "Victoria Park East Golf Club": { lat: 43.4767769, lng: -80.1213153 },
+  "Walter Gretzky Municipal Golf Course": { lat: 43.1619315, lng: -80.3037926 },
 };
 
 const CSV_COURSES: CsvCourse[] = [
@@ -250,17 +250,21 @@ export async function geocodeAndSeedCourses(): Promise<{ inserted: number; updat
 export async function seedGtaCourses(): Promise<void> {
   const existing = await storage.searchCourses();
   if (existing.length > 0) {
-    // Update any existing courses that are missing coordinates
+    // Update coordinates for all courses with verified CSV data
     let updated = 0;
     for (const course of existing) {
-      if (!course.lat && GEOCODED_COORDS[course.name]) {
-        const coords = GEOCODED_COORDS[course.name];
+      const coords = GEOCODED_COORDS[course.name];
+      if (!coords) continue;
+      const latDiff = Math.abs((course.lat ?? 0) - coords.lat);
+      const lngDiff = Math.abs((course.lng ?? 0) - coords.lng);
+      // Update if missing or differs by more than ~10 meters
+      if (!course.lat || !course.lng || latDiff > 0.0001 || lngDiff > 0.0001) {
         await storage.updateCourse(course.id, { lat: coords.lat, lng: coords.lng });
         updated++;
       }
     }
     if (updated > 0) {
-      console.log(`[seed] Backfilled coordinates for ${updated} existing courses`);
+      console.log(`[seed] Updated coordinates for ${updated} courses from verified CSV data`);
     }
     return;
   }

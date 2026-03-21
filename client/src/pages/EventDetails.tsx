@@ -21,9 +21,10 @@ import { useAuthContext } from "@/lib/AuthProvider";
 import { apiRequest } from "@/lib/queryClient";
 import {
   Calendar, MapPin, Users, Vote, CheckCircle2, MessageSquare, Map,
-  ClipboardList, Settings, UserCog, Send, Mail, Crown, Shield, Clock, XCircle, UserCheck,
+  ClipboardList, Settings, UserCog, Send, Mail, Crown, Shield, Clock, XCircle, UserCheck, Plus,
 } from "lucide-react";
 import { useState } from "react";
+import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { Event, Group, Course, Poll, Rsvp, User, Membership } from "@shared/schema";
 import { ChatView } from "@/components/ChatView";
@@ -92,6 +93,8 @@ export default function EventDetails() {
 
   const [sendUpdateMsg, setSendUpdateMsg] = useState("");
   const [sendUpdateDialogOpen, setSendUpdateDialogOpen] = useState(false);
+
+  const [newDateInputs, setNewDateInputs] = useState<Record<string, string>>({});
 
   const { data: event, isLoading } = useQuery<EventWithDetails>({
     queryKey: ["/api/events", eventId],
@@ -203,6 +206,28 @@ export default function EventDetails() {
     onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
   });
 
+  const applyPollOptionMutation = useMutation({
+    mutationFn: ({ pollId, optionId }: { pollId: string; optionId: string }) =>
+      apiRequest("POST", `/api/polls/${pollId}/apply-result`, { winningOptionId: optionId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/polls/event", eventId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
+      toast({ title: "Poll result applied!" });
+    },
+    onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
+  });
+
+  const addDateOptionMutation = useMutation({
+    mutationFn: ({ pollId, dateOption }: { pollId: string; dateOption: string }) =>
+      apiRequest("POST", `/api/polls/${pollId}/options`, { dateOption }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/polls/event", eventId] });
+      setNewDateInputs(prev => ({ ...prev, [variables.pollId]: "" }));
+      toast({ title: "Date suggested!" });
+    },
+    onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
+  });
+
   if (isLoading || !event) {
     return (
       <div className="min-h-screen bg-background">
@@ -231,7 +256,7 @@ export default function EventDetails() {
   }
 
   function getRsvpStatus(userId: string) {
-    const rsvp = event.rsvps.find(r => r.userId === userId);
+    const rsvp = event!.rsvps.find(r => r.userId === userId);
     return rsvp?.status ?? null;
   }
 
@@ -384,45 +409,127 @@ export default function EventDetails() {
 
           {/* POLLS TAB */}
           <TabsContent value="polls">
-            {event.state === "polling" ? (
-              <div className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Active Polls</CardTitle>
-                    <CardDescription>Cast your vote on the course and date for this event</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {coursePoll && (
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-sm">Course Poll</p>
-                          <p className="text-xs text-muted-foreground">Vote for your preferred venue</p>
-                        </div>
-                        <span className="text-xs text-muted-foreground capitalize">{coursePoll.visibility}</span>
-                      </div>
-                    )}
-                    {datePoll && (
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-sm">Date Poll</p>
-                          <p className="text-xs text-muted-foreground">Vote for your preferred date</p>
-                        </div>
-                        <span className="text-xs text-muted-foreground capitalize">{datePoll.visibility}</span>
-                      </div>
-                    )}
-                    <div className="pt-2">
-                      <Link href={`/events/${eventId}/polls`}>
-                        <a>
-                          <Button data-testid="button-view-polls">
-                            <Vote className="h-4 w-4 mr-2" />View &amp; Vote on Polls
-                          </Button>
-                        </a>
-                      </Link>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            ) : event.state === "draft" ? (
+            {event.state === "polling" ? (() => {
+              const todayStr = new Date().toISOString().split("T")[0];
+              return (
+                <div className="space-y-4">
+                  {(detailedPolls ?? []).map((poll) => {
+                    const isDate = poll.type === "date";
+                    const sorted = [...(poll.options ?? [])].sort((a, b) => b.voteCount - a.voteCount);
+                    const total = sorted.reduce((s, o) => s + o.voteCount, 0);
+                    return (
+                      <Card key={poll.id} data-testid={`card-poll-tab-${poll.type}`}>
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <CardTitle className="flex items-center gap-2 text-base">
+                              {isDate ? <Calendar className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}
+                              {isDate ? "Date Poll" : "Course Poll"}
+                            </CardTitle>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-xs capitalize">{poll.visibility}</Badge>
+                              <Link href={`/events/${eventId}/polls`}>
+                                <a>
+                                  <Button size="sm" variant="outline" data-testid={`button-vote-${poll.type}`}>
+                                    <Vote className="h-3 w-3 mr-1" />Vote
+                                  </Button>
+                                </a>
+                              </Link>
+                            </div>
+                          </div>
+                          <CardDescription>
+                            {sorted.length} option{sorted.length !== 1 ? "s" : ""} · {total} vote{total !== 1 ? "s" : ""} cast
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          {/* Suggest a date (all members, date poll only) */}
+                          {isDate && poll.visibility === "live" && (
+                            <div className="flex gap-2 items-center p-3 bg-muted/40 rounded-md">
+                              <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+                              <Input
+                                type="date"
+                                min={todayStr}
+                                value={newDateInputs[poll.id] || ""}
+                                onChange={(e) => setNewDateInputs(prev => ({ ...prev, [poll.id]: e.target.value }))}
+                                className="flex-1"
+                                data-testid={`input-suggest-date-${poll.id}`}
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  if (newDateInputs[poll.id]) {
+                                    addDateOptionMutation.mutate({ pollId: poll.id, dateOption: newDateInputs[poll.id] });
+                                  }
+                                }}
+                                disabled={!newDateInputs[poll.id] || addDateOptionMutation.isPending}
+                                data-testid={`button-suggest-date-${poll.id}`}
+                              >
+                                <Plus className="h-3 w-3 mr-1" />Suggest
+                              </Button>
+                            </div>
+                          )}
+
+                          {sorted.length === 0 ? (
+                            <p className="text-sm text-muted-foreground text-center py-3">
+                              {isDate ? "No dates suggested yet — use the picker above." : "No courses added yet. Browse the Course Map tab to add courses."}
+                            </p>
+                          ) : (
+                            <div className="space-y-2">
+                              {sorted.map((opt, idx) => {
+                                const label = opt.label ?? opt.course?.name ?? opt.dateOption ?? "Option";
+                                const sub = !isDate && opt.course ? `${opt.course.city}, ${opt.course.region}` : null;
+                                const pct = total > 0 ? Math.round((opt.voteCount / total) * 100) : 0;
+                                const isLeading = idx === 0 && opt.voteCount > 0;
+                                return (
+                                  <div
+                                    key={opt.id}
+                                    className={`border rounded-md p-3 ${isLeading ? "border-primary/50 bg-primary/5" : ""}`}
+                                    data-testid={`poll-option-${opt.id}`}
+                                  >
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium truncate">{label}</p>
+                                        {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+                                        <div className="mt-2">
+                                          <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                                            <span>{opt.voteCount} vote{opt.voteCount !== 1 ? "s" : ""}</span>
+                                            <span>{pct}%</span>
+                                          </div>
+                                          <Progress value={pct} className="h-1.5" />
+                                        </div>
+                                      </div>
+                                      {isOrganizer && poll.visibility === "live" && (
+                                        <Button
+                                          size="sm"
+                                          variant={isLeading ? "default" : "outline"}
+                                          onClick={() => applyPollOptionMutation.mutate({ pollId: poll.id, optionId: opt.id })}
+                                          disabled={applyPollOptionMutation.isPending}
+                                          data-testid={`button-pick-${opt.id}`}
+                                          className="shrink-0"
+                                        >
+                                          <CheckCircle2 className="h-3 w-3 mr-1" />Pick This
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                  {(!detailedPolls || detailedPolls.length === 0) && (
+                    <Card>
+                      <CardContent className="pt-6 text-center">
+                        <Vote className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">Loading poll data...</p>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              );
+            })() : event.state === "draft" ? (
               <Card>
                 <CardContent className="pt-6 text-center">
                   <Vote className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
@@ -464,11 +571,19 @@ export default function EventDetails() {
             ) : (
               <Card>
                 <CardContent className="pt-6 text-center">
-                  <CheckCircle2 className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">Polling has closed.</p>
-                  {event.course && <p className="text-sm mt-1">Chosen course: <strong>{event.course.name}</strong></p>}
+                  <CheckCircle2 className="h-10 w-10 mx-auto mb-3 text-green-600" />
+                  <p className="text-sm font-medium mb-2">Polling complete</p>
+                  {event.course && (
+                    <div className="flex items-center justify-center gap-1 text-sm text-muted-foreground mb-1">
+                      <MapPin className="h-3.5 w-3.5 shrink-0" />
+                      <span><strong>{event.course.name}</strong></span>
+                    </div>
+                  )}
                   {event.chosenDate && (
-                    <p className="text-sm mt-1">Chosen date: <strong>{new Date(event.chosenDate).toLocaleDateString()}</strong></p>
+                    <div className="flex items-center justify-center gap-1 text-sm text-muted-foreground">
+                      <Calendar className="h-3.5 w-3.5 shrink-0" />
+                      <span><strong>{new Date(event.chosenDate).toLocaleDateString("en-CA", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</strong></span>
+                    </div>
                   )}
                 </CardContent>
               </Card>
