@@ -40,7 +40,7 @@ export type Group = z.infer<typeof groupSchema>;
 export type InsertGroup = z.infer<typeof insertGroupSchema>;
 
 // ===== MEMBERSHIP SCHEMA =====
-export const membershipRoleEnum = z.enum(["owner", "member"]);
+export const membershipRoleEnum = z.enum(["owner", "organizer", "member"]);
 
 export const membershipSchema = z.object({
   id: z.string(),
@@ -319,7 +319,7 @@ export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
 // ========================================
 
 // Enums
-export const membershipRoleEnumDb = pgEnum("membership_role", ["owner", "member"]);
+export const membershipRoleEnumDb = pgEnum("membership_role", ["owner", "organizer", "member"]);
 export const eventStateEnumDb = pgEnum("event_state", ["draft", "polling", "rsvp", "final", "closed"]);
 export const pollTypeEnumDb = pgEnum("poll_type", ["course", "date"]);
 export const pollVisibilityEnumDb = pgEnum("poll_visibility", ["live", "hidden"]);

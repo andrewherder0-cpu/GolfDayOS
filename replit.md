@@ -21,18 +21,20 @@ Golf Day OS helps groups organize golf events with a complete workflow: draft cr
   - Login.tsx + Signup.tsx: support `?next=` redirect and `?email=` pre-fill (for invitation flow)
   - End-to-end tested: invite send, pending list, accept page states, login redirect, signup pre-fill
 
-- **March 21, 2026**: Tournament Detail Tabs
-  - Refactored EventDetails.tsx from two-column layout to Shadcn Tabs
-  - Tabs: Overview | Polls | RSVP | Course Map | Chat | Organizer (owner only)
-  - Default tab based on event state: draft → Overview, polling → Polls, rsvp/final → RSVP
-  - Overview tab: event details card + attendance status + quick-action sidebar cards
-  - Polls tab: active polls summary with View & Vote link; empty states for draft/closed
-  - RSVP tab: capacity bar, RSVP list link, pairings link (final state)
-  - Course Map tab: full CourseMapView with side list + iframe embed
-  - Chat tab: ChatView at 520px height
-  - Organizer tab: full lifecycle management controls (Open Polls → Open RSVP → Finalize)
-  - Fixed StatusBadge crash with poll.visibility values (now uses plain text span)
-  - End-to-end tested: all tabs render correctly, email invite works
+- **March 21, 2026**: Tournament Detail Tabs & Organizer Panel (Task #4)
+  - Added `"organizer"` role to `membershipRoleEnum` (Zod + Drizzle pgEnum); db:push applied
+  - `updateMembershipRole(userId, groupId, role)` added to IStorage + DatabaseStorage
+  - `PATCH /api/groups/:id/members/:userId/role` — owner-only role promotion/demotion
+  - `POST /api/events/:id/send-update` — stub broadcasts message to confirmed RSVPs
+  - `PATCH /api/events/:id` — now accepts organizer role (not just creator)
+  - All event lifecycle + pairing routes updated to accept organizer role via `isEventOrganizer()` helper
+  - `GET /api/events/:id` returns `membership`, `members` (with user) alongside existing fields
+  - EventDetails tabs: Overview | Polls | RSVP | **Players** | Course Map | Chat | **Settings** (organizer-gated)
+  - **Players tab**: all group members cross-referenced with RSVP status (Confirmed/Waitlisted/Withdrawn/No RSVP)
+  - **Settings tab**: lifecycle controls, edit event (draft only), RSVP summary, poll results with vote bars, send-update dialog, co-organizer role select (owner only), pending invitations
+  - `isOrganizer` computed as: `createdBy === user.id OR membership.role === "organizer"/"owner"`
+  - Map & Chat tabs pass `isOrganizer` instead of `isOwner` for broader access
+  - End-to-end tested: all 7 tabs render, edit event, send update, open polls all working
 
 - **March 21, 2026**: GTA Golf Course Map (secure iframe architecture)
   - Added `phone` varchar field to courses table (schema + db:push)

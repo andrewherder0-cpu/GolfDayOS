@@ -23,6 +23,7 @@ import type {
   Group,
   InsertGroup,
   Membership,
+  MembershipRole,
   InsertMembership,
   Course,
   InsertCourse,
@@ -66,6 +67,7 @@ export interface IStorage {
   getMembership(userId: string, groupId: string): Promise<Membership | undefined>;
   getGroupMemberships(groupId: string): Promise<Membership[]>;
   createMembership(membership: InsertMembership): Promise<Membership>;
+  updateMembershipRole(userId: string, groupId: string, role: MembershipRole): Promise<Membership | undefined>;
 
   // Courses
   getCourse(id: string): Promise<Course | undefined>;
@@ -263,6 +265,19 @@ export class DatabaseStorage implements IStorage {
 
   async createMembership(insertMembership: InsertMembership): Promise<Membership> {
     const [membership] = await db.insert(memberships).values(insertMembership).returning();
+    return {
+      ...membership,
+      joinedAt: membership.joinedAt.toISOString(),
+    };
+  }
+
+  async updateMembershipRole(userId: string, groupId: string, role: MembershipRole): Promise<Membership | undefined> {
+    const [membership] = await db
+      .update(memberships)
+      .set({ role })
+      .where(and(eq(memberships.userId, userId), eq(memberships.groupId, groupId)))
+      .returning();
+    if (!membership) return undefined;
     return {
       ...membership,
       joinedAt: membership.joinedAt.toISOString(),

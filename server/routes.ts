@@ -145,6 +145,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Helper: check if user is an event organizer (creator, group owner, or organizer role)
+  async function isEventOrganizer(userId: string, eventOrGroupId: { createdBy: string; groupId: string }): Promise<boolean> {
+    if (eventOrGroupId.createdBy === userId) return true;
+    const membership = await storage.getMembership(userId, eventOrGroupId.groupId);
+    return membership?.role === "owner" || membership?.role === "organizer";
+  }
+
   // Shared helper: create a token invitation and stub-send the email
   async function createTokenInvitation(group: { id: string; name: string; joinCode: string; ownerId: string }, inviterId: string, inviterName: string, email: string, req: Request) {
     const trimmedEmail = email.trim().toLowerCase();
@@ -366,6 +373,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         members: membersWithDetails,
         events,
       });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ===== CO-ORGANIZER MANAGEMENT =====
+  app.patch("/api/groups/:id/members/:userId/role", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const group = await storage.getGroup(req.params.id);
+      if (!group) return res.status(404).json({ error: "Group not found" });
+
+      // Only owner can promote/demote
+      if (group.ownerId !== req.user!.id) {
+        return res.status(403).json({ error: "Only the group owner can manage organizer roles" });
+      }
+
+      const { role } = req.body;
+      if (!role || !["organizer", "member"].includes(role)) {
+        return res.status(400).json({ error: "Role must be 'organizer' or 'member'" });
+      }
+
+      // Cannot change owner's role
+      if (req.params.userId === group.ownerId) {
+        return res.status(400).json({ error: "Cannot change the owner's role" });
+      }
+
+      const membership = await storage.getMembership(req.params.userId, group.id);
+      if (!membership) return res.status(404).json({ error: "Member not found in group" });
+
+      const updated = await storage.updateMembershipRole(req.params.userId, group.id, role);
+      res.json(updated);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -658,8 +696,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!poll) return res.status(404).json({ error: "Poll not found" });
 
       const event = await storage.getEvent(poll.eventId);
-      if (!event || event.createdBy !== req.user!.id) {
-        return res.status(403).json({ error: "Only event creator can add poll options" });
+      if (!event || !await isEventOrganizer(req.user!.id, event)) {
+        return res.status(403).json({ error: "Only event organizers can add poll options" });
       }
 
       if (poll.type !== "course") {
@@ -737,12 +775,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Event not found" });
       }
 
-      if (event.createdBy !== req.user!.id) {
-        return res.status(403).json({ error: "Only event creator can update" });
-      }
-
-      if (event.state !== "draft") {
-        return res.status(400).json({ error: "Can only update draft events" });
+      if (!await isEventOrganizer(req.user!.id, event)) {
+        return res.status(403).json({ error: "Only event organizers can update" });
       }
 
       const data = updateEventSchema.parse(req.body);
@@ -761,8 +795,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Event not found" });
       }
 
-      if (event.createdBy !== req.user!.id) {
-        return res.status(403).json({ error: "Only event creator can open polls" });
+      if (!await isEventOrganizer(req.user!.id, event)) {
+        return res.status(403).json({ error: "Only event organizers can open polls" });
       }
 
       if (event.state !== "draft") {
@@ -817,8 +851,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Event not found" });
       }
 
-      if (event.createdBy !== req.user!.id) {
-        return res.status(403).json({ error: "Only event creator can open RSVP" });
+      if (!await isEventOrganizer(req.user!.id, event)) {
+        return res.status(403).json({ error: "Only event organizers can open RSVP" });
       }
 
       if (event.state !== "polling") {
@@ -850,8 +884,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Event not found" });
       }
 
-      if (event.createdBy !== req.user!.id) {
-        return res.status(403).json({ error: "Only event creator can finalize" });
+      if (!await isEventOrganizer(req.user!.id, event)) {
+        return res.status(403).json({ error: "Only event organizers can finalize" });
       }
 
       if (event.state !== "rsvp") {
@@ -867,6 +901,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       res.json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/events/:id/send-update", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const event = await storage.getEvent(req.params.id);
+      if (!event) return res.status(404).json({ error: "Event not found" });
+
+      if (!await isEventOrganizer(req.user!.id, event)) {
+        return res.status(403).json({ error: "Only event organizers can send updates" });
+      }
+
+      const { message } = req.body;
+      if (!message?.trim()) return res.status(400).json({ error: "Message is required" });
+
+      // Stub: in production, email all RSVPed members
+      const rsvps = await storage.getEventRsvps(event.id);
+      const joined = rsvps.filter(r => r.status === "joined");
+
+      console.log(`[send-update] Event "${event.title}" — ${joined.length} recipients — message: ${message}`);
+
+      res.json({ success: true, recipientCount: joined.length });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -905,17 +963,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Not a member of this group" });
       }
 
-      const group = await storage.getGroup(event.groupId);
-      const course = event.chosenCourseId ? await storage.getCourse(event.chosenCourseId) : undefined;
-      const polls = await storage.getEventPolls(event.id);
-      const rsvps = await storage.getEventRsvps(event.id);
+      const [group, course, polls, rsvps, allMemberships] = await Promise.all([
+        storage.getGroup(event.groupId),
+        event.chosenCourseId ? storage.getCourse(event.chosenCourseId) : Promise.resolve(undefined),
+        storage.getEventPolls(event.id),
+        storage.getEventRsvps(event.id),
+        storage.getGroupMemberships(event.groupId),
+      ]);
 
-      const rsvpsWithUsers = await Promise.all(
-        rsvps.map(async (rsvp) => {
+      const [rsvpsWithUsers, membersWithUsers] = await Promise.all([
+        Promise.all(rsvps.map(async (rsvp) => {
           const user = await storage.getUser(rsvp.userId);
           return { ...rsvp, user };
-        })
-      );
+        })),
+        Promise.all(allMemberships.map(async (m) => {
+          const user = await storage.getUser(m.userId);
+          return { ...m, user };
+        })),
+      ]);
 
       res.json({
         ...event,
@@ -923,6 +988,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         course,
         polls,
         rsvps: rsvpsWithUsers,
+        members: membersWithUsers,
+        membership,
       });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -1009,8 +1076,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const event = await storage.getEvent(poll.eventId);
-      if (!event || event.createdBy !== req.user!.id) {
-        return res.status(403).json({ error: "Only event creator can close polls" });
+      if (!event || !await isEventOrganizer(req.user!.id, event)) {
+        return res.status(403).json({ error: "Only event organizers can close polls" });
       }
 
       await storage.updatePoll(poll.id, { visibility: "hidden" });
@@ -1029,8 +1096,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const event = await storage.getEvent(poll.eventId);
-      if (!event || event.createdBy !== req.user!.id) {
-        return res.status(403).json({ error: "Only event creator can apply results" });
+      if (!event || !await isEventOrganizer(req.user!.id, event)) {
+        return res.status(403).json({ error: "Only event organizers can apply results" });
       }
 
       const options = await storage.getPollOptions(poll.id);
@@ -1303,8 +1370,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Event not found" });
       }
 
-      if (event.createdBy !== req.user!.id) {
-        return res.status(403).json({ error: "Only event creator can create pairings" });
+      if (!await isEventOrganizer(req.user!.id, event)) {
+        return res.status(403).json({ error: "Only event organizers can create pairings" });
       }
 
       const { name, teeTimeText } = req.body;
@@ -1328,8 +1395,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const event = await storage.getEvent(pairing.eventId);
-      if (!event || event.createdBy !== req.user!.id) {
-        return res.status(403).json({ error: "Only event creator can update pairings" });
+      if (!event || !await isEventOrganizer(req.user!.id, event)) {
+        return res.status(403).json({ error: "Only event organizers can update pairings" });
       }
 
       const { name, teeTimeText } = req.body;
@@ -1349,8 +1416,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const event = await storage.getEvent(pairing.eventId);
-      if (!event || event.createdBy !== req.user!.id) {
-        return res.status(403).json({ error: "Only event creator can add members" });
+      if (!event || !await isEventOrganizer(req.user!.id, event)) {
+        return res.status(403).json({ error: "Only event organizers can add members" });
       }
 
       const { userId } = req.body;
@@ -1381,8 +1448,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const event = await storage.getEvent(pairing.eventId);
-      if (!event || event.createdBy !== req.user!.id) {
-        return res.status(403).json({ error: "Only event creator can remove members" });
+      if (!event || !await isEventOrganizer(req.user!.id, event)) {
+        return res.status(403).json({ error: "Only event organizers can remove members" });
       }
 
       await storage.deletePairingMember(member.id);
@@ -1406,8 +1473,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const event = await storage.getEvent(pairing.eventId);
-      if (!event || event.createdBy !== req.user!.id) {
-        return res.status(403).json({ error: "Only event creator can reorder members" });
+      if (!event || !await isEventOrganizer(req.user!.id, event)) {
+        return res.status(403).json({ error: "Only event organizers can reorder members" });
       }
 
       const { direction } = req.body;
