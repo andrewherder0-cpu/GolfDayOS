@@ -15,6 +15,9 @@ import { geocodeAndSeedCourses } from "./seed";
 const upload = multer({ storage: multer.memoryStorage() });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Trust Replit's reverse proxy so secure cookies work over HTTPS in production
+  app.set("trust proxy", 1);
+
   // Session middleware
   app.use(
     session({
@@ -60,11 +63,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         password: passwordHash,
       });
 
-      // Set session
+      // Set session and wait for it to be persisted before responding
       (req.session as any).userId = user.id;
-
       const { passwordHash: _, ...userWithoutPassword } = user;
-      res.json(userWithoutPassword);
+      req.session.save((err) => {
+        if (err) return res.status(500).json({ error: "Session error" });
+        res.json(userWithoutPassword);
+      });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -84,10 +89,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Invalid credentials" });
       }
 
+      // Set session and wait for it to be persisted before responding
       (req.session as any).userId = user.id;
-
       const { passwordHash: _, ...userWithoutPassword } = user;
-      res.json(userWithoutPassword);
+      req.session.save((err) => {
+        if (err) return res.status(500).json({ error: "Session error" });
+        res.json(userWithoutPassword);
+      });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
