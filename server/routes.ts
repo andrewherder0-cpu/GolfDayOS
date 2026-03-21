@@ -10,6 +10,7 @@ import { generateTeeSheetPDF } from "./utils/pdf";
 import { randomBytes } from "crypto";
 import { notifyPollOpened, notifyRsvpOpened, notifySpotAvailable, notifyRosterLocked, notifyTeeSheetPosted, notifyGroupInvite } from "./utils/email";
 import { insertUserSchema, insertGroupSchema, insertCourseSchema, insertEventSchema, updateEventSchema } from "@shared/schema";
+import { geocodeAndSeedCourses } from "./seed";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -570,6 +571,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const coursesJson = JSON.stringify(withCoords.map(c => ({
       id: c.id,
       name: c.name,
+      address: c.address || "",
       city: c.city,
       region: c.region,
       lat: c.lat,
@@ -612,9 +614,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         var label = addedIds.has(c.id) ? "Added" : "Add to Poll";
         btn = '<button class="add-btn" id="abtn-'+esc(c.id)+'" '+disabled+'>'+esc(label)+'</button>';
       }
-      return '<div style="min-width:190px;max-width:230px;font-family:sans-serif;">'
-        +'<p style="font-weight:600;font-size:13px;margin:0 0 3px;">'+esc(c.name)+'</p>'
-        +'<p style="font-size:11px;color:#64748b;margin:0 0 4px;">'+esc(c.city)+', '+esc(c.region)+'</p>'
+      return '<div style="min-width:200px;max-width:240px;font-family:sans-serif;">'
+        +'<p style="font-weight:600;font-size:13px;margin:0 0 2px;">'+esc(c.name)+'</p>'
+        +(c.address ? '<p style="font-size:11px;color:#374151;margin:0 0 1px;">'+esc(c.address)+'</p>' : '')
+        +'<p style="font-size:11px;color:#64748b;margin:0 0 5px;">'+esc(c.city)+', '+esc(c.region)+'</p>'
         +(c.feeNote ? '<p style="font-size:11px;color:#64748b;margin:0 0 3px;">'+esc(c.feeNote)+'</p>' : '')
         +(c.phone ? '<p style="font-size:11px;color:#64748b;margin:0 0 3px;">&#9742; '+esc(c.phone)+'</p>' : '')
         +'<div style="margin-bottom:6px;">'+tags+'</div>'
@@ -1646,6 +1649,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ===== ADMIN: GEOCODE & RESEED COURSES FROM CSV =====
+  app.post("/api/admin/reseed-courses", requireAuth, async (req: Request, res: Response) => {
+    try {
+      console.log("[admin] Starting course geocode & reseed...");
+      const result = await geocodeAndSeedCourses();
+      console.log(`[admin] Reseed complete: ${result.inserted} inserted, ${result.updated} updated, ${result.failed.length} failed`);
+      res.json({ success: true, ...result });
+    } catch (error: unknown) {
+      console.error("[admin] Reseed failed:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Reseed failed" });
     }
   });
 

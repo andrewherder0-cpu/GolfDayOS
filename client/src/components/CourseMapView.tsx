@@ -154,8 +154,14 @@ export function CourseMapView({ coursePoll, isOrganizer }: CourseMapViewProps) {
           <div className="flex items-start justify-between gap-2 mb-2">
             <div>
               <h3 className="font-semibold text-sm">{selectedCourse.name}</h3>
-              <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                <MapPin className="h-3 w-3" /> {selectedCourse.city}, {selectedCourse.region}
+              <p className="text-xs text-muted-foreground flex items-start gap-1 mt-0.5">
+                <MapPin className="h-3 w-3 mt-0.5 shrink-0" />
+                <span>
+                  {selectedCourse.address && (
+                    <span className="block">{selectedCourse.address}</span>
+                  )}
+                  <span>{selectedCourse.city}, {selectedCourse.region}</span>
+                </span>
               </p>
             </div>
             {canAddToPoll && coursePoll && (

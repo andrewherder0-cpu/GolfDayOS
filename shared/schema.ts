@@ -354,6 +354,7 @@ export const memberships = pgTable("memberships", {
 export const courses = pgTable("courses", {
   id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
   name: varchar("name", { length: 255 }).notNull(),
+  address: varchar("address", { length: 255 }),
   city: varchar("city", { length: 100 }).notNull(),
   region: varchar("region", { length: 100 }).notNull(),
   lat: real("lat"),
