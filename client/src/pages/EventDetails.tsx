@@ -1069,27 +1069,33 @@ export default function EventDetails() {
                 )}
 
                 {/* Pending Invitations */}
-                {invitations && invitations.length > 0 && (
+                {canViewInvitations && (
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-base flex items-center gap-2">
                         <Mail className="h-4 w-4" />Pending Invitations
                       </CardTitle>
-                      <CardDescription>{invitations.filter(i => !i.acceptedAt).length} awaiting acceptance</CardDescription>
+                      <CardDescription>
+                        {invitations ? `${invitations.filter(i => !i.acceptedAt).length} awaiting acceptance` : "Loading..."}
+                      </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-2">
-                      {invitations.map((inv) => (
-                        <div key={inv.id} className="flex items-center justify-between">
-                          <span className="text-sm text-muted-foreground truncate">{inv.email}</span>
-                          {inv.acceptedAt ? (
-                            <Badge variant="default" className="text-xs shrink-0">Accepted</Badge>
-                          ) : new Date(inv.expiresAt) < new Date() ? (
-                            <Badge variant="outline" className="text-xs text-muted-foreground shrink-0">Expired</Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-xs shrink-0">Pending</Badge>
-                          )}
-                        </div>
-                      ))}
+                      {invitations && invitations.length > 0 ? (
+                        invitations.map((inv) => (
+                          <div key={inv.id} className="flex items-center justify-between">
+                            <span className="text-sm text-muted-foreground truncate">{inv.email}</span>
+                            {inv.acceptedAt ? (
+                              <Badge variant="default" className="text-xs shrink-0">Accepted</Badge>
+                            ) : new Date(inv.expiresAt) < new Date() ? (
+                              <Badge variant="outline" className="text-xs text-muted-foreground shrink-0">Expired</Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-xs shrink-0">Pending</Badge>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No invitations sent yet.</p>
+                      )}
                     </CardContent>
                   </Card>
                 )}
