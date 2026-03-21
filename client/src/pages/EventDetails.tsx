@@ -42,9 +42,23 @@ interface EventWithDetails extends Event {
   membership: Membership;
 }
 
+interface PollOption {
+  id: string;
+  label?: string;
+  courseId?: string;
+  dateOption?: string;
+  voteCount: number;
+  course?: Course;
+}
+
 interface PollWithOptions extends Poll {
-  options: { id: string; label?: string; courseId?: string; dateOption?: string; voteCount: number; course?: Course }[];
+  options: PollOption[];
   userVote?: string;
+}
+
+interface EventPollsResponse {
+  polls: PollWithOptions[];
+  [key: string]: unknown;
 }
 
 interface Invitation {
@@ -80,14 +94,21 @@ export default function EventDetails() {
     enabled: !!eventId,
   });
 
-  const { data: detailedPolls } = useQuery<PollWithOptions[]>({
+  const { data: eventPollsData } = useQuery<EventPollsResponse>({
     queryKey: ["/api/polls/event", eventId],
     enabled: !!eventId,
   });
+  const detailedPolls = eventPollsData?.polls;
+
+  const canViewInvitations = !!event && (
+    event.createdBy === user?.id ||
+    event.membership?.role === "organizer" ||
+    event.membership?.role === "owner"
+  );
 
   const { data: invitations } = useQuery<Invitation[]>({
     queryKey: ["/api/groups", event?.groupId, "invitations"],
-    enabled: !!event?.groupId,
+    enabled: canViewInvitations,
   });
 
   const openPollsMutation = useMutation({

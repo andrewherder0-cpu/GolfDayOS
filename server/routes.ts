@@ -222,8 +222,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const group = await storage.getGroup(req.params.id);
       if (!group) return res.status(404).json({ error: "Group not found" });
 
-      if (group.ownerId !== req.user!.id) {
-        return res.status(403).json({ error: "Only the group owner can view invitations" });
+      // Allow owner OR organizer role to view invitations
+      const membership = await storage.getMembership(req.user!.id, group.id);
+      const isOwnerOrOrg = group.ownerId === req.user!.id || membership?.role === "organizer" || membership?.role === "owner";
+      if (!isOwnerOrOrg) {
+        return res.status(403).json({ error: "Only group organizers can view invitations" });
       }
 
       const invs = await storage.listGroupInvitations(group.id);
