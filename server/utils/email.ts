@@ -1,13 +1,20 @@
-// Email notification stubs (console logging)
-// In production, replace with SendGrid, AWS SES, or similar
+import { getUncachableResendClient } from './resendClient';
 
-export function sendEmail(to: string, subject: string, body: string): void {
-  console.log("📧 [EMAIL]", {
-    to,
-    subject,
-    body,
-    timestamp: new Date().toISOString(),
-  });
+async function sendEmail(to: string, subject: string, body: string): Promise<void> {
+  try {
+    const { client, fromEmail } = await getUncachableResendClient();
+    const from = fromEmail || 'Golf Day OS <noreply@golfdayos.com>';
+    await client.emails.send({
+      from,
+      to,
+      subject,
+      text: body,
+    });
+    console.log('[EMAIL] Sent via Resend:', { to, subject });
+  } catch (err) {
+    console.log('[EMAIL] Resend unavailable, falling back to console log:', err instanceof Error ? err.message : err);
+    console.log('[EMAIL]', { to, subject, body, timestamp: new Date().toISOString() });
+  }
 }
 
 export function notifyPollOpened(to: string, eventTitle: string, pollType: string): void {
