@@ -426,6 +426,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const withCoords = all.filter(c => c.lat != null && c.lng != null);
     const canAddToPoll = req.query.canAddToPoll === "1";
     const pollId = typeof req.query.pollId === "string" ? req.query.pollId : "";
+    // Escape </script> sequences to prevent stored XSS when embedding JSON in <script> block
     const coursesJson = JSON.stringify(withCoords.map(c => ({
       id: c.id,
       name: c.name,
@@ -437,7 +438,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       phone: c.phone || "",
       website: c.website || "",
       tags: c.tags,
-    })));
+    }))).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
 
     const html = `<!DOCTYPE html>
 <html lang="en">
