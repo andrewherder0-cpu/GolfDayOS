@@ -43,17 +43,9 @@ export default function GroupDetails() {
     enabled: !!groupId && !!isOwner,
   });
 
-  const generateInviteMutation = useMutation({
-    mutationFn: () => apiRequest<{ joinCode: string }>("POST", `/api/groups/${groupId}/invite`, {}),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId] });
-      toast({ title: "Invite code refreshed!" });
-    },
-  });
-
   const sendEmailInviteMutation = useMutation({
     mutationFn: (email: string) =>
-      apiRequest("POST", `/api/groups/${groupId}/invite-email`, { email }),
+      apiRequest("POST", `/api/groups/${groupId}/invite`, { email }),
     onSuccess: (_data, email) => {
       toast({ title: "Invitation sent!", description: `An invite was sent to ${email}` });
       setInviteEmail("");

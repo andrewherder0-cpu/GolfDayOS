@@ -62,13 +62,14 @@ export default function AcceptInvitation() {
   const isAlreadyAccepted = invitation?.acceptedAt != null;
   const isValid = invitation && !isExpired && !isAlreadyAccepted;
 
-  // Auto-accept once when user becomes authenticated and the invitation is valid
+  // Auto-accept once when user is authenticated, emails match, and invitation is valid
+  const emailMatches = user && invitation && user.email.toLowerCase() === invitation.email.toLowerCase();
   useEffect(() => {
-    if (user && isValid && !autoAcceptFiredRef.current && !acceptMutation.isPending && !acceptMutation.isSuccess) {
+    if (user && isValid && emailMatches && !autoAcceptFiredRef.current && !acceptMutation.isPending && !acceptMutation.isSuccess) {
       autoAcceptFiredRef.current = true;
       acceptMutation.mutate();
     }
-  }, [user, isValid]);
+  }, [user, isValid, emailMatches]);
 
   if (isLoading) {
     return (
