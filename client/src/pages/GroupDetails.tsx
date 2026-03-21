@@ -11,7 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Copy, Plus, Users, Calendar, UserPlus, Send, Mail, Clock } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Copy, Plus, Users, Calendar, UserPlus, Send, Mail, Clock, Crown, Shield } from "lucide-react";
 import { useState } from "react";
 import { useAuthContext } from "@/lib/AuthProvider";
 import type { Group, Event, User, Membership, Invitation } from "@shared/schema";
@@ -36,6 +38,8 @@ export default function GroupDetails() {
   });
 
   const isOwner = group && currentUser && group.ownerId === currentUser.id;
+  const currentUserMembership = group?.members.find(m => m.userId === currentUser?.id);
+  const isOwnerOrOrg = isOwner || currentUserMembership?.role === "organizer";
 
   const { data: invitations } = useQuery<Invitation[]>({
     queryKey: ["/api/groups", groupId, "invitations"],
@@ -54,6 +58,16 @@ export default function GroupDetails() {
     onError: (error: Error) => {
       toast({ title: "Failed to send invite", description: error.message, variant: "destructive" });
     },
+  });
+
+  const updateRoleMutation = useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: "organizer" | "member" }) =>
+      apiRequest("PATCH", `/api/groups/${groupId}/members/${userId}/role`, { role }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId] });
+      toast({ title: "Role updated!" });
+    },
+    onError: (e: Error) => toast({ title: "Failed to update role", description: e.message, variant: "destructive" }),
   });
 
   const copyJoinCode = () => {
@@ -186,14 +200,16 @@ export default function GroupDetails() {
                   </DialogContent>
                 </Dialog>
 
-                <Link href={`/groups/${groupId}/events/new`}>
-                  <a>
-                    <Button className="w-full" data-testid="button-new-event">
-                      <Plus className="h-4 w-4 mr-2" />
-                      New Event
-                    </Button>
-                  </a>
-                </Link>
+                {isOwnerOrOrg && (
+                  <Link href={`/groups/${groupId}/events/new`}>
+                    <a>
+                      <Button className="w-full" data-testid="button-new-event">
+                        <Plus className="h-4 w-4 mr-2" />
+                        New Event
+                      </Button>
+                    </a>
+                  </Link>
+                )}
               </div>
             </Card>
 
@@ -206,22 +222,65 @@ export default function GroupDetails() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
-                  {group.members.map((membership) => (
-                    <div
-                      key={membership.id}
-                      className="flex items-center justify-between py-2 border-b last:border-0"
-                      data-testid={`member-${membership.userId}`}
-                    >
-                      <div>
-                        <p className="text-sm font-medium">{membership.user.name}</p>
-                        <p className="text-xs text-muted-foreground">{membership.user.email}</p>
+                <div className="space-y-1">
+                  {group.members.map((membership) => {
+                    const isThisOwner = membership.userId === group.ownerId;
+                    const isCurrentUser = membership.userId === currentUser?.id;
+                    return (
+                      <div
+                        key={membership.id}
+                        className="flex items-center justify-between py-2 border-b last:border-0 gap-3"
+                        data-testid={`member-${membership.userId}`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          {isThisOwner ? (
+                            <Crown className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                          ) : membership.role === "organizer" ? (
+                            <Shield className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                          ) : (
+                            <span className="h-3.5 w-3.5 shrink-0" />
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              {membership.user.name}
+                              {isCurrentUser && <span className="text-xs text-muted-foreground ml-1">(you)</span>}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">{membership.user.email}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {isThisOwner ? (
+                            <Badge variant="outline" className="text-xs text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 dark:text-amber-400" data-testid={`badge-role-${membership.userId}`}>
+                              Owner
+                            </Badge>
+                          ) : isOwner ? (
+                            <Select
+                              value={membership.role}
+                              onValueChange={(role) =>
+                                updateRoleMutation.mutate({ userId: membership.userId, role: role as "organizer" | "member" })
+                              }
+                            >
+                              <SelectTrigger className="h-7 text-xs w-28" data-testid={`select-role-${membership.userId}`}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="organizer">Organizer</SelectItem>
+                                <SelectItem value="member">Member</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Badge
+                              variant="secondary"
+                              className="text-xs"
+                              data-testid={`badge-role-${membership.userId}`}
+                            >
+                              {membership.role === "organizer" ? "Organizer" : "Member"}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
-                      {membership.role === "owner" && (
-                        <span className="text-xs bg-muted px-2 py-1 rounded">Owner</span>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
@@ -294,13 +353,17 @@ export default function GroupDetails() {
                   <CardContent className="pt-6 text-center">
                     <Calendar className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
                     <p className="text-sm text-muted-foreground mb-3">No events yet</p>
-                    <Link href={`/groups/${groupId}/events/new`}>
-                      <a>
-                        <Button size="sm" data-testid="button-create-first-event">
-                          Create your first event
-                        </Button>
-                      </a>
-                    </Link>
+                    {isOwnerOrOrg ? (
+                      <Link href={`/groups/${groupId}/events/new`}>
+                        <a>
+                          <Button size="sm" data-testid="button-create-first-event">
+                            Create your first event
+                          </Button>
+                        </a>
+                      </Link>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Events will appear here once an organizer creates one.</p>
+                    )}
                   </CardContent>
                 </Card>
               )}

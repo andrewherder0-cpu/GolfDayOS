@@ -810,10 +810,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertEventSchema.parse(req.body);
       
-      // Check if user is a member of the group
       const membership = await storage.getMembership(req.user!.id, data.groupId);
       if (!membership) {
         return res.status(403).json({ error: "Not a member of this group" });
+      }
+
+      // Only owners and organizers can create events
+      if (membership.role !== "owner" && membership.role !== "organizer") {
+        return res.status(403).json({ error: "Only group owners and organizers can create events" });
       }
 
       const event = await storage.createEvent(data, req.user!.id);

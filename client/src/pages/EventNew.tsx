@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, useRoute, Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigation } from "@/components/Navigation";
@@ -11,7 +11,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ArrowLeft } from "lucide-react";
-import type { Event, Group } from "@shared/schema";
+import { useAuthContext } from "@/lib/AuthProvider";
+import type { Event, Group, Membership, User } from "@shared/schema";
+
+interface GroupWithMembers extends Group {
+  members: (Membership & { user: User })[];
+}
 
 export default function EventNew() {
   const [, params] = useRoute("/groups/:groupId/events/new");
@@ -19,6 +24,7 @@ export default function EventNew() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user: currentUser } = useAuthContext();
 
   const [formData, setFormData] = useState({
     title: "",
@@ -26,10 +32,22 @@ export default function EventNew() {
     notes: "",
   });
 
-  const { data: group } = useQuery<Group>({
+  const { data: group } = useQuery<GroupWithMembers>({
     queryKey: ["/api/groups", groupId],
     enabled: !!groupId,
   });
+
+  // Redirect plain members — only owners and organizers can create events
+  useEffect(() => {
+    if (!group || !currentUser) return;
+    const membership = group.members?.find(m => m.userId === currentUser.id);
+    const isOwner = group.ownerId === currentUser.id;
+    const isOrg = membership?.role === "organizer";
+    if (membership && !isOwner && !isOrg) {
+      toast({ title: "Access denied", description: "Only organizers can create events.", variant: "destructive" });
+      setLocation(`/groups/${groupId}`);
+    }
+  }, [group, currentUser]);
 
   const createMutation = useMutation({
     mutationFn: (data: { groupId: string; title: string; capacity: number; notes?: string }) => {
