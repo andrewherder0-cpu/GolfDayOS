@@ -1,0 +1,420 @@
+# Golf Tournament App MVP
+
+## Product goal
+
+Build a private tournament app for recurring friend golf events that handles:
+
+* login and user accounts
+* tournament creation
+* invites by email or join code
+* RSVP tracking
+* course voting
+* date voting
+* organizer roles
+* group chat inside each tournament
+* GTA golf course map
+
+## Product framing
+
+This is not a broad golf app. It is a private event and tournament coordination app with golf-specific workflows.
+
+---
+
+## Core user roles
+
+### 1. Player
+
+* create account
+* join a tournament by invite or code
+* RSVP yes / no / maybe
+* vote in polls
+* chat in tournament group
+* view course options on map
+* see event details and updates
+
+### 2. Organizer
+
+* create tournaments
+* invite players
+* generate join code
+* add co-organizers
+* create course and date polls
+* send updates
+* manage RSVPs
+* moderate chat
+
+### 3. Admin
+
+* system-level control
+* manage users and edge cases
+
+---
+
+## MVP features
+
+### Authentication
+
+* email/password signup
+* Google sign-in optional later
+* password reset
+* email verification
+
+### Tournament creation
+
+* title
+* format
+* description
+* tentative season label
+* organizer list
+* max players optional
+* join code
+* invite by email
+
+### Invitations and onboarding
+
+* organizer adds emails
+* system sends invite email with sign-up link
+* user creates account and lands inside tournament
+* optional join by code for existing users
+
+### RSVP
+
+* yes / no / maybe
+* optional note
+* organizer view of status counts
+* reminder messaging later
+
+### Polls
+
+* date poll with multiple date options
+* course poll with multiple course options
+* one vote per player per poll unless organizer allows multiple
+* results visible to organizer and optionally to players
+
+### Golf course map
+
+* map of Greater Toronto Area
+* markers for golf courses
+* organizer can search and add course options to a poll
+* course detail card with name, address, website, phone, and estimated drive time later
+
+### Tournament chat
+
+* one group chat per tournament
+* real-time messages
+* organizer pinning of announcements later
+* basic moderation controls
+
+### Organizer controls
+
+* multiple organizers per tournament
+* add or remove co-organizers
+* send tournament-wide updates
+* lock poll voting or close poll
+
+---
+
+## Screens
+
+### 1. Landing page
+
+* explanation of app
+* sign up / log in
+* join with code CTA
+
+### 2. Dashboard
+
+* upcoming tournaments
+* invites pending
+* tournaments you organize
+* RSVP tasks
+
+### 3. Tournament detail page
+
+Tabs:
+
+* Overview
+* RSVP
+* Polls
+* Chat
+* Players
+* Course Map
+* Settings if organizer
+
+### 4. Tournament creator
+
+* basic info
+* invite players
+* assign co-organizers
+* create join code
+* create initial date poll
+* create initial course poll
+
+### 5. Poll builder
+
+* add options
+* choose open/close date
+* visibility settings
+
+### 6. GTA course map
+
+* full map view
+* course markers
+* search/filter by city or region
+* add selected course to tournament poll
+
+### 7. Chat screen
+
+* message list
+* composer
+* member list
+
+### 8. Organizer panel
+
+* RSVP summary
+* invite status
+* poll results
+* co-organizers
+* send update email
+
+---
+
+## Recommended tech stack
+
+### Frontend
+
+* Next.js
+* Tailwind
+* shadcn/ui
+
+### Backend
+
+* Supabase
+
+### Auth
+
+* Supabase Auth
+
+### Database
+
+* Postgres via Supabase
+
+### Real-time chat
+
+* Supabase Realtime
+
+### Email
+
+* Resend
+
+### Maps
+
+* Google Maps Platform or Mapbox
+
+### Hosting
+
+* Vercel
+
+---
+
+## Integration notes
+
+### Email
+
+Use email for:
+
+* invites
+* account verification
+* RSVP reminders
+* organizer updates
+
+### WhatsApp
+
+Do not make WhatsApp a core dependency for v1 chat.
+Use it later for outbound notifications or reminder messages only.
+
+Reason:
+WhatsApp production setup and template flows add friction compared with email and in-app chat.
+
+### In-app chat
+
+Launch with in-app chat first.
+It gives you the group conversation feature you want without relying on external messaging approvals.
+
+---
+
+## GTA golf course map approach
+
+### Option A: manual seed database
+
+* preload known GTA courses
+* fastest for MVP
+* more control over data quality
+
+### Option B: map/search API-assisted
+
+* use Google Places or Mapbox search to find golf courses dynamically
+* better long term
+* more API cost and implementation detail
+
+### Recommended approach
+
+For MVP:
+
+* start with seeded GTA golf course data in your own database
+* show markers on the map
+* allow organizer to search and select them
+* add API-assisted search later
+
+---
+
+## Database model
+
+### users
+
+* id
+* name
+* email
+* avatar_url
+* created_at
+
+### tournaments
+
+* id
+* title
+* description
+* format
+* created_by
+* join_code
+* status
+* created_at
+
+### tournament_members
+
+* id
+* tournament_id
+* user_id
+* role (player / organizer)
+* rsvp_status
+* joined_at
+
+### invitations
+
+* id
+* tournament_id
+* email
+* invited_by
+* token
+* accepted_at
+* created_at
+
+### polls
+
+* id
+* tournament_id
+* type (date / course / custom)
+* title
+* closes_at
+* created_by
+
+### poll_options
+
+* id
+* poll_id
+* label
+* course_id nullable
+* option_date nullable
+
+### poll_votes
+
+* id
+* poll_id
+* option_id
+* user_id
+
+### courses
+
+* id
+* name
+* address
+* city
+* latitude
+* longitude
+* website
+* phone
+
+### chat_messages
+
+* id
+* tournament_id
+* user_id
+* content
+* created_at
+
+---
+
+## Build phases
+
+### Phase 1: launchable MVP
+
+* auth
+* dashboard
+* create tournament
+* invite by email
+* join by code
+* RSVP
+* course and date polls
+* tournament member roles
+* in-app chat
+* GTA course map
+
+### Phase 2
+
+* push/email reminders
+* pinned announcements
+* course details enrichment
+* tee time planning
+* payment collection
+* file/photo uploads
+
+### Phase 3
+
+* scorekeeping
+* teams and pairings
+* recurring annual tournament duplication
+* WhatsApp/SMS reminders
+* leaderboard and history
+
+---
+
+## Product decisions to protect scope
+
+### Keep in v1
+
+* private tournaments
+* invitation flow
+* simple polls
+* simple chat
+* organizer permissions
+
+### Exclude from v1
+
+* live scorekeeping
+* payments
+* tee sheet generation
+* advanced handicap logic
+* public tournaments
+* native mobile app
+
+---
+
+## Recommended next build artifact
+
+Create clickable wireframes for these six screens first:
+
+1. Landing page
+2. Dashboard
+3. Tournament detail page
+4. Tournament creator
+5. GTA course map
+6. Polls + chat view
