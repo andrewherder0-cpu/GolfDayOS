@@ -145,30 +145,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Shared helper: create a token invitation and stub-send the email
+  async function createTokenInvitation(group: { id: string; name: string; joinCode: string; ownerId: string }, inviterId: string, inviterName: string, email: string, req: Request) {
+    const trimmedEmail = email.trim().toLowerCase();
+    const token = randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const invitation = await storage.createInvitation({
+      groupId: group.id,
+      email: trimmedEmail,
+      invitedBy: inviterId,
+      token,
+      expiresAt,
+    });
+
+    const host = req.headers.host || "localhost:5000";
+    const protocol = req.headers["x-forwarded-proto"] || "http";
+    const inviteUrl = `${protocol}://${host}/invitations/${token}`;
+    notifyGroupInvite(trimmedEmail, inviterName, group.name, group.joinCode, inviteUrl);
+
+    return invitation;
+  }
+
   app.post("/api/groups/:id/invite", requireAuth, async (req: Request, res: Response) => {
     try {
       const group = await storage.getGroup(req.params.id);
-      if (!group) {
-        return res.status(404).json({ error: "Group not found" });
-      }
+      if (!group) return res.status(404).json({ error: "Group not found" });
 
-      // Check if user is owner
       if (group.ownerId !== req.user!.id) {
-        return res.status(403).json({ error: "Only group owner can generate invite codes" });
+        return res.status(403).json({ error: "Only the group owner can send invitations" });
       }
 
-      res.json({ joinCode: group.joinCode });
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      const { email } = req.body;
+      if (!email || typeof email !== "string" || !email.includes("@")) {
+        return res.status(400).json({ error: "Valid email address required" });
+      }
+
+      const invitation = await createTokenInvitation(group, req.user!.id, req.user!.name, email, req);
+      res.json({ success: true, message: `Invitation sent to ${email.trim().toLowerCase()}`, invitation });
+    } catch (error: unknown) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Unknown error" });
     }
   });
 
+  // Alias: invite-email routes to the same logic (frontend compatibility)
   app.post("/api/groups/:id/invite-email", requireAuth, async (req: Request, res: Response) => {
     try {
       const group = await storage.getGroup(req.params.id);
       if (!group) return res.status(404).json({ error: "Group not found" });
 
-      // Only owner can send email invitations
       if (group.ownerId !== req.user!.id) {
         return res.status(403).json({ error: "Only the group owner can send email invitations" });
       }
@@ -178,26 +203,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Valid email address required" });
       }
 
-      const trimmedEmail = email.trim().toLowerCase();
-
-      // Generate a secure token (32 bytes = 64 hex chars)
-      const token = randomBytes(32).toString("hex");
-      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days
-
-      const invitation = await storage.createInvitation({
-        groupId: group.id,
-        email: trimmedEmail,
-        invitedBy: req.user!.id,
-        token,
-        expiresAt,
-      });
-
-      const host = req.headers.host || "localhost:5000";
-      const protocol = req.headers["x-forwarded-proto"] || "http";
-      const inviteUrl = `${protocol}://${host}/invitations/${token}`;
-
-      notifyGroupInvite(trimmedEmail, req.user!.name, group.name, group.joinCode, inviteUrl);
-      res.json({ success: true, message: `Invitation sent to ${trimmedEmail}`, invitation });
+      const invitation = await createTokenInvitation(group, req.user!.id, req.user!.name, email, req);
+      res.json({ success: true, message: `Invitation sent to ${email.trim().toLowerCase()}`, invitation });
     } catch (error: unknown) {
       res.status(400).json({ error: error instanceof Error ? error.message : "Unknown error" });
     }
@@ -251,6 +258,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const now = new Date();
       if (new Date(inv.expiresAt) < now) {
         return res.status(400).json({ error: "Invitation has expired" });
+      }
+
+      // Bind acceptance to invited email (prevent token forwarding abuse)
+      if (req.user!.email.toLowerCase() !== inv.email.toLowerCase()) {
+        return res.status(403).json({
+          error: `This invitation was sent to ${inv.email}. Please sign in with that email to accept.`,
+        });
       }
 
       // Check if already a member

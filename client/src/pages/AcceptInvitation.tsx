@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuthContext } from "@/lib/AuthProvider";
@@ -25,7 +25,7 @@ export default function AcceptInvitation() {
   const [, setLocation] = useLocation();
   const { user } = useAuthContext();
   const { toast } = useToast();
-  const [autoAccepted, setAutoAccepted] = useState(false);
+  const autoAcceptFiredRef = useRef(false); // prevents re-triggering auto-accept after an error
 
   const { data: invitation, isLoading, error } = useQuery<InvitationInfo>({
     queryKey: ["/api/invitations", token],
@@ -43,7 +43,9 @@ export default function AcceptInvitation() {
   const acceptMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", `/api/invitations/${token}/accept`, {});
-      return res.json() as Promise<{ groupId: string }>;
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "Failed to accept invitation");
+      return body as { groupId: string };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/groups/mine"] });
@@ -51,6 +53,7 @@ export default function AcceptInvitation() {
       setLocation(`/groups/${data.groupId}`);
     },
     onError: (err: Error) => {
+      // Don't reset autoAcceptFiredRef — manual retry is via the button
       toast({ title: "Could not accept invitation", description: err.message, variant: "destructive" });
     },
   });
@@ -59,13 +62,13 @@ export default function AcceptInvitation() {
   const isAlreadyAccepted = invitation?.acceptedAt != null;
   const isValid = invitation && !isExpired && !isAlreadyAccepted;
 
-  // Auto-accept when user becomes authenticated and the invitation is valid
+  // Auto-accept once when user becomes authenticated and the invitation is valid
   useEffect(() => {
-    if (user && isValid && !autoAccepted && !acceptMutation.isPending && !acceptMutation.isSuccess) {
-      setAutoAccepted(true);
+    if (user && isValid && !autoAcceptFiredRef.current && !acceptMutation.isPending && !acceptMutation.isSuccess) {
+      autoAcceptFiredRef.current = true;
       acceptMutation.mutate();
     }
-  }, [user, isValid, autoAccepted]);
+  }, [user, isValid]);
 
   if (isLoading) {
     return (
@@ -191,12 +194,18 @@ export default function AcceptInvitation() {
           {user ? (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                Signed in as <strong>{user.name}</strong>
+                Signed in as <strong>{user.name}</strong>{" "}
+                <span className="text-xs">({user.email})</span>
               </p>
+              {user.email.toLowerCase() !== invitation.email.toLowerCase() && (
+                <p className="text-sm text-destructive" data-testid="text-email-mismatch">
+                  This invitation was sent to <strong>{invitation.email}</strong>. Please sign in with that email to accept.
+                </p>
+              )}
               <Button
                 className="w-full"
                 onClick={() => acceptMutation.mutate()}
-                disabled={acceptMutation.isPending || autoAccepted}
+                disabled={acceptMutation.isPending || acceptMutation.isSuccess}
                 data-testid="button-accept-invitation"
               >
                 {acceptMutation.isPending ? "Joining..." : `Join ${invitation.groupName}`}
