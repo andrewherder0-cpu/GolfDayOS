@@ -18,6 +18,7 @@ import PollView from "@/pages/PollView";
 import RSVPPage from "@/pages/RSVPPage";
 import Pairings from "@/pages/Pairings";
 import Settings from "@/pages/Settings";
+import AcceptInvitation from "@/pages/AcceptInvitation";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ component: Component, ...rest }: any) {
@@ -92,6 +93,9 @@ function Router() {
       <Route path="/settings">
         <ProtectedRoute component={Settings} />
       </Route>
+
+      {/* Invitations */}
+      <Route path="/invitations/:token" component={AcceptInvitation} />
 
       {/* 404 */}
       <Route component={NotFound} />

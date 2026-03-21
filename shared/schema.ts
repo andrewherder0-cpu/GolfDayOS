@@ -271,6 +271,29 @@ export const insertChatMessageSchema = z.object({
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 
+// ===== INVITATION SCHEMA =====
+export const invitationSchema = z.object({
+  id: z.string(),
+  groupId: z.string(),
+  email: z.string().email(),
+  invitedBy: z.string(),
+  token: z.string(),
+  acceptedAt: z.string().nullable(),
+  expiresAt: z.string(),
+  createdAt: z.string(),
+});
+
+export const insertInvitationSchema = z.object({
+  groupId: z.string(),
+  email: z.string().email(),
+  invitedBy: z.string(),
+  token: z.string(),
+  expiresAt: z.string(),
+});
+
+export type Invitation = z.infer<typeof invitationSchema>;
+export type InsertInvitation = z.infer<typeof insertInvitationSchema>;
+
 // ===== ACTIVITY LOG SCHEMA =====
 export const activityLogSchema = z.object({
   id: z.string(),
@@ -428,6 +451,17 @@ export const chatMessages = pgTable("chat_messages", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const invitations = pgTable("invitations", {
+  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  groupId: varchar("group_id", { length: 36 }).notNull().references(() => groups.id),
+  email: varchar("email", { length: 255 }).notNull(),
+  invitedBy: varchar("invited_by", { length: 36 }).notNull().references(() => users.id),
+  token: varchar("token", { length: 64 }).notNull().unique(),
+  acceptedAt: timestamp("accepted_at"),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   memberships: many(memberships),
@@ -564,6 +598,17 @@ export const activityLogsRelations = relations(activityLogs, ({ one }) => ({
   }),
   actor: one(users, {
     fields: [activityLogs.actorId],
+    references: [users.id],
+  }),
+}));
+
+export const invitationsRelations = relations(invitations, ({ one }) => ({
+  group: one(groups, {
+    fields: [invitations.groupId],
+    references: [groups.id],
+  }),
+  inviter: one(users, {
+    fields: [invitations.invitedBy],
     references: [users.id],
   }),
 }));

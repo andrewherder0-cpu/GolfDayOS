@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useAuthContext } from "@/lib/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,23 +9,26 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function Login() {
   const [, setLocation] = useLocation();
+  const search = useSearch();
+  const params = new URLSearchParams(search);
+  const nextPath = params.get("next") || "/dashboard";
+
   const { login, signup, loginPending, signupPending, user } = useAuthContext();
   const { toast } = useToast();
   const [isSignup, setIsSignup] = useState(false);
   const [formData, setFormData] = useState({
-    email: "",
+    email: params.get("email") || "",
     password: "",
     name: "",
     phone: "",
   });
   const justAuthenticated = useRef(false);
 
-  // Redirect to dashboard when user becomes authenticated after login/signup
   useEffect(() => {
     if (user && justAuthenticated.current) {
-      setLocation("/dashboard");
+      setLocation(nextPath);
     }
-  }, [user, setLocation]);
+  }, [user, setLocation, nextPath]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

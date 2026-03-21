@@ -7,6 +7,7 @@ import Papa from "papaparse";
 import { storage } from "./storage";
 import { requireAuth } from "./middleware/auth";
 import { generateTeeSheetPDF } from "./utils/pdf";
+import { randomBytes } from "crypto";
 import { notifyPollOpened, notifyRsvpOpened, notifySpotAvailable, notifyRosterLocked, notifyTeeSheetPosted, notifyGroupInvite } from "./utils/email";
 import { insertUserSchema, insertGroupSchema, insertCourseSchema, insertEventSchema, updateEventSchema } from "@shared/schema";
 
@@ -167,20 +168,104 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const group = await storage.getGroup(req.params.id);
       if (!group) return res.status(404).json({ error: "Group not found" });
 
-      const membership = await storage.getMembership(req.user!.id, group.id);
-      if (!membership) return res.status(403).json({ error: "Not a member of this group" });
+      // Only owner can send email invitations
+      if (group.ownerId !== req.user!.id) {
+        return res.status(403).json({ error: "Only the group owner can send email invitations" });
+      }
 
       const { email } = req.body;
       if (!email || typeof email !== "string" || !email.includes("@")) {
         return res.status(400).json({ error: "Valid email address required" });
       }
 
+      const trimmedEmail = email.trim().toLowerCase();
+
+      // Generate a secure token (32 bytes = 64 hex chars)
+      const token = randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days
+
+      const invitation = await storage.createInvitation({
+        groupId: group.id,
+        email: trimmedEmail,
+        invitedBy: req.user!.id,
+        token,
+        expiresAt,
+      });
+
       const host = req.headers.host || "localhost:5000";
       const protocol = req.headers["x-forwarded-proto"] || "http";
-      const joinUrl = `${protocol}://${host}/join/${group.joinCode}`;
+      const inviteUrl = `${protocol}://${host}/invitations/${token}`;
 
-      notifyGroupInvite(email.trim(), req.user!.name, group.name, group.joinCode, joinUrl);
-      res.json({ success: true, message: `Invitation sent to ${email.trim()}` });
+      notifyGroupInvite(trimmedEmail, req.user!.name, group.name, group.joinCode, inviteUrl);
+      res.json({ success: true, message: `Invitation sent to ${trimmedEmail}`, invitation });
+    } catch (error: unknown) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  app.get("/api/groups/:id/invitations", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const group = await storage.getGroup(req.params.id);
+      if (!group) return res.status(404).json({ error: "Group not found" });
+
+      if (group.ownerId !== req.user!.id) {
+        return res.status(403).json({ error: "Only the group owner can view invitations" });
+      }
+
+      const invs = await storage.listGroupInvitations(group.id);
+      res.json(invs);
+    } catch (error: unknown) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  // ===== INVITATION ACCEPT ROUTES =====
+  app.get("/api/invitations/:token", async (req: Request, res: Response) => {
+    try {
+      const inv = await storage.getInvitationByToken(req.params.token);
+      if (!inv) return res.status(404).json({ error: "Invitation not found" });
+
+      const group = await storage.getGroup(inv.groupId);
+      const inviter = await storage.getUser(inv.invitedBy);
+
+      res.json({
+        token: inv.token,
+        email: inv.email,
+        groupId: inv.groupId,
+        groupName: group?.name ?? "Unknown Group",
+        inviterName: inviter?.name ?? "Someone",
+        expiresAt: inv.expiresAt,
+        acceptedAt: inv.acceptedAt,
+      });
+    } catch (error: unknown) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  app.post("/api/invitations/:token/accept", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const inv = await storage.getInvitationByToken(req.params.token);
+      if (!inv) return res.status(404).json({ error: "Invitation not found" });
+      if (inv.acceptedAt) return res.status(400).json({ error: "Invitation already accepted" });
+
+      const now = new Date();
+      if (new Date(inv.expiresAt) < now) {
+        return res.status(400).json({ error: "Invitation has expired" });
+      }
+
+      // Check if already a member
+      const existing = await storage.getMembership(req.user!.id, inv.groupId);
+      if (!existing) {
+        await storage.createMembership({
+          userId: req.user!.id,
+          groupId: inv.groupId,
+          role: "member",
+        });
+      }
+
+      await storage.acceptInvitation(inv.token);
+
+      res.json({ success: true, groupId: inv.groupId });
     } catch (error: unknown) {
       res.status(400).json({ error: error instanceof Error ? error.message : "Unknown error" });
     }

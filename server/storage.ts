@@ -15,6 +15,7 @@ import {
   pairingMembers,
   activityLogs,
   chatMessages,
+  invitations,
 } from "@shared/schema";
 import type {
   User,
@@ -44,6 +45,8 @@ import type {
   InsertActivityLog,
   ChatMessage,
   InsertChatMessage,
+  Invitation,
+  InsertInvitation,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -120,6 +123,12 @@ export interface IStorage {
   // Chat Messages
   getChatMessages(eventId: string): Promise<ChatMessage[]>;
   createChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
+
+  // Invitations
+  createInvitation(invitation: InsertInvitation): Promise<Invitation>;
+  getInvitationByToken(token: string): Promise<Invitation | undefined>;
+  listGroupInvitations(groupId: string): Promise<Invitation[]>;
+  acceptInvitation(token: string): Promise<Invitation | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -735,6 +744,60 @@ export class DatabaseStorage implements IStorage {
     return {
       ...msg,
       createdAt: msg.createdAt.toISOString(),
+    };
+  }
+
+  // Invitations
+  async createInvitation(invitation: InsertInvitation): Promise<Invitation> {
+    const [inv] = await db.insert(invitations).values({
+      ...invitation,
+      expiresAt: new Date(invitation.expiresAt),
+    }).returning();
+    return {
+      ...inv,
+      acceptedAt: inv.acceptedAt ? inv.acceptedAt.toISOString() : null,
+      expiresAt: inv.expiresAt.toISOString(),
+      createdAt: inv.createdAt.toISOString(),
+    };
+  }
+
+  async getInvitationByToken(token: string): Promise<Invitation | undefined> {
+    const [inv] = await db.select().from(invitations).where(eq(invitations.token, token));
+    if (!inv) return undefined;
+    return {
+      ...inv,
+      acceptedAt: inv.acceptedAt ? inv.acceptedAt.toISOString() : null,
+      expiresAt: inv.expiresAt.toISOString(),
+      createdAt: inv.createdAt.toISOString(),
+    };
+  }
+
+  async listGroupInvitations(groupId: string): Promise<Invitation[]> {
+    const result = await db
+      .select()
+      .from(invitations)
+      .where(eq(invitations.groupId, groupId))
+      .orderBy(desc(invitations.createdAt));
+    return result.map(inv => ({
+      ...inv,
+      acceptedAt: inv.acceptedAt ? inv.acceptedAt.toISOString() : null,
+      expiresAt: inv.expiresAt.toISOString(),
+      createdAt: inv.createdAt.toISOString(),
+    }));
+  }
+
+  async acceptInvitation(token: string): Promise<Invitation | undefined> {
+    const [inv] = await db
+      .update(invitations)
+      .set({ acceptedAt: new Date() })
+      .where(eq(invitations.token, token))
+      .returning();
+    if (!inv) return undefined;
+    return {
+      ...inv,
+      acceptedAt: inv.acceptedAt ? inv.acceptedAt.toISOString() : null,
+      expiresAt: inv.expiresAt.toISOString(),
+      createdAt: inv.createdAt.toISOString(),
     };
   }
 }

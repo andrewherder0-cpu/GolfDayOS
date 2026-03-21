@@ -8,13 +8,18 @@ Golf Day OS helps groups organize golf events with a complete workflow: draft cr
 
 ## Recent Changes
 
-- **March 21, 2026**: Email Invitation Flow
-  - Added `POST /api/groups/:id/invite-email` route — any group member can invite by email
-  - Generates join URL (`/join/:joinCode`) and sends email stub (console log, ready for real email service)
-  - Updated GroupDetails "Invite Members" dialog: added "Send Email Invitation" section below join code display
-  - Email input (data-testid="input-invite-email") + Send button (data-testid="button-send-invite-email")
-  - Success toast on send; input cleared on success; error toast on failure
-  - End-to-end tested: invite dialog, email send, toast feedback all working
+- **March 21, 2026**: Email Invitation Flow (token-based)
+  - Added `invitations` PostgreSQL table (id, groupId, email, invitedBy, token, acceptedAt, expiresAt, createdAt)
+  - Storage methods: createInvitation, getInvitationByToken, listGroupInvitations, acceptInvitation
+  - `POST /api/groups/:id/invite-email` (owner only) — creates secure 64-hex token, 7-day expiry, stubs email
+  - `GET /api/groups/:id/invitations` (owner only) — lists all invitations for the group
+  - `GET /api/invitations/:token` (public) — returns group name, inviter name, email, expiry info
+  - `POST /api/invitations/:token/accept` (auth required) — creates membership + marks acceptedAt
+  - GroupDetails: invite form (owner-only email section), pending invitations card below members
+  - AcceptInvitation page at `/invitations/:token` — handles valid/expired/already-accepted states
+  - If logged in: "Join Group" button auto-accepts; if not: "Create Account" + "Sign In" links
+  - Login.tsx + Signup.tsx: support `?next=` redirect and `?email=` pre-fill (for invitation flow)
+  - End-to-end tested: invite send, pending list, accept page states, login redirect, signup pre-fill
 
 - **March 21, 2026**: Tournament Detail Tabs
   - Refactored EventDetails.tsx from two-column layout to Shadcn Tabs

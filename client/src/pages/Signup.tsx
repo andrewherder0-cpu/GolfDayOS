@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { useAuthContext } from "@/lib/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,22 +15,25 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function Signup() {
   const [, setLocation] = useLocation();
+  const search = useSearch();
+  const params = new URLSearchParams(search);
+  const nextPath = params.get("next") || "/dashboard";
+
   const { signup, signupPending, user } = useAuthContext();
   const { toast } = useToast();
   const [formData, setFormData] = useState({
-    email: "",
+    email: params.get("email") || "",
     password: "",
     name: "",
     phone: "",
   });
   const justSignedUp = useRef(false);
 
-  // Redirect to dashboard when user becomes authenticated after signup
   useEffect(() => {
     if (user && justSignedUp.current) {
-      setLocation("/dashboard");
+      setLocation(nextPath);
     }
-  }, [user, setLocation]);
+  }, [user, setLocation, nextPath]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
