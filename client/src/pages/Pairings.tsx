@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Download, Plus, Trash2, ChevronUp, ChevronDown, FileText } from "lucide-react";
+import { Download, Plus, Trash2, ChevronUp, ChevronDown, FileText, Shuffle, AlertTriangle } from "lucide-react";
 import type { Event, Group, Pairing, PairingMember, User, Rsvp } from "@shared/schema";
 
 interface PairingWithMembers extends Pairing {
@@ -32,6 +32,8 @@ export default function Pairings() {
   const { toast } = useToast();
   const [newPairingOpen, setNewPairingOpen] = useState(false);
   const [pairingForm, setPairingForm] = useState({ name: "", teeTimeText: "" });
+  const [generateTeamsOpen, setGenerateTeamsOpen] = useState(false);
+  const [groupSize, setGroupSize] = useState("4");
 
   const { data: event, isLoading } = useQuery<EventWithPairings>({
     queryKey: ["/api/pairings/event", eventId],
@@ -79,6 +81,25 @@ export default function Pairings() {
       apiRequest("POST", `/api/pairings/${pairingId}/members/${memberId}/reorder`, { direction }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/pairings/event", eventId] });
+    },
+  });
+
+  const generateRandomTeamsMutation = useMutation({
+    mutationFn: (size: number) =>
+      apiRequest<{ success: boolean; groupCount: number; playerCount: number }>(
+        "POST", `/api/pairings/event/${eventId}/generate-random`, { groupSize: size }
+      ),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pairings/event", eventId] });
+      setGenerateTeamsOpen(false);
+      toast({
+        title: "Teams generated!",
+        description: `${data.playerCount} players split into ${data.groupCount} group${data.groupCount !== 1 ? "s" : ""}.`,
+      });
+    },
+    onError: (e: unknown) => {
+      const msg = e instanceof Error ? e.message : "Failed to generate teams";
+      toast({ title: "Error", description: msg, variant: "destructive" });
     },
   });
 
@@ -155,6 +176,64 @@ export default function Pairings() {
                 <Download className="h-4 w-4 mr-2" />
                 Tee Sheet PDF
               </Button>
+
+              {/* Generate Random Teams */}
+              <Dialog open={generateTeamsOpen} onOpenChange={setGenerateTeamsOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" data-testid="button-generate-teams">
+                    <Shuffle className="h-4 w-4 mr-2" />
+                    Random Teams
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Generate Random Teams</DialogTitle>
+                    <DialogDescription>
+                      Randomly shuffle confirmed players into groups.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-2">
+                    {event.pairings.length > 0 && (
+                      <div className="flex items-start gap-2 p-3 rounded-md bg-muted/50 border">
+                        <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                        <p className="text-sm text-muted-foreground">
+                          This will replace the {event.pairings.length} existing group{event.pairings.length !== 1 ? "s" : ""} with newly randomized teams.
+                        </p>
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <Label htmlFor="group-size">Players per group</Label>
+                      <Select value={groupSize} onValueChange={setGroupSize}>
+                        <SelectTrigger id="group-size" data-testid="select-group-size">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="2">2 players</SelectItem>
+                          <SelectItem value="3">3 players</SelectItem>
+                          <SelectItem value="4">4 players (standard foursome)</SelectItem>
+                          <SelectItem value="5">5 players</SelectItem>
+                          <SelectItem value="6">6 players</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        {event.availablePlayers.length + event.pairings.flatMap(p => p.members).length} confirmed players →
+                        {" "}{Math.ceil((event.availablePlayers.length + event.pairings.flatMap(p => p.members).length) / parseInt(groupSize))} group{Math.ceil((event.availablePlayers.length + event.pairings.flatMap(p => p.members).length) / parseInt(groupSize)) !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="outline" onClick={() => setGenerateTeamsOpen(false)}>Cancel</Button>
+                      <Button
+                        onClick={() => generateRandomTeamsMutation.mutate(parseInt(groupSize))}
+                        disabled={generateRandomTeamsMutation.isPending}
+                        data-testid="button-confirm-generate-teams"
+                      >
+                        {generateRandomTeamsMutation.isPending ? "Generating..." : "Generate Teams"}
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
               <Dialog open={newPairingOpen} onOpenChange={setNewPairingOpen}>
                 <DialogTrigger asChild>
                   <Button data-testid="button-new-pairing">

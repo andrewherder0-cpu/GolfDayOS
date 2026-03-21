@@ -1557,6 +1557,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/pairings/event/:eventId/generate-random", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const event = await storage.getEvent(req.params.eventId);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      if (!await isEventOrganizer(req.user!.id, event)) {
+        return res.status(403).json({ error: "Only event organizers can generate pairings" });
+      }
+
+      if (event.state !== "final" && event.state !== "closed") {
+        return res.status(400).json({ error: "RSVP must be closed before generating teams" });
+      }
+
+      const groupSize = Math.max(2, Math.min(6, parseInt(req.body.groupSize) || 4));
+
+      // Get all confirmed players
+      const rsvps = await storage.getEventRsvps(event.id);
+      const joinedRsvps = rsvps.filter((r) => r.status === "joined");
+      if (joinedRsvps.length === 0) {
+        return res.status(400).json({ error: "No confirmed players to generate teams from" });
+      }
+
+      // Clear existing pairings
+      const existingPairings = await storage.getEventPairings(event.id);
+      for (const pairing of existingPairings) {
+        const members = await storage.getPairingMembers(pairing.id);
+        for (const member of members) {
+          await storage.deletePairingMember(member.id);
+        }
+        await storage.deletePairing(pairing.id);
+      }
+
+      // Fisher-Yates shuffle
+      const playerIds = joinedRsvps.map((r) => r.userId);
+      for (let i = playerIds.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [playerIds[i], playerIds[j]] = [playerIds[j], playerIds[i]];
+      }
+
+      // Divide into groups and create pairings
+      const created = [];
+      for (let i = 0; i < playerIds.length; i += groupSize) {
+        const groupPlayers = playerIds.slice(i, i + groupSize);
+        const groupNumber = Math.floor(i / groupSize) + 1;
+        const pairing = await storage.createPairing({
+          eventId: event.id,
+          name: `Group ${groupNumber}`,
+          teeTimeText: "",
+        });
+        for (let j = 0; j < groupPlayers.length; j++) {
+          await storage.createPairingMember({
+            pairingId: pairing.id,
+            userId: groupPlayers[j],
+            orderInt: j,
+          });
+        }
+        created.push(pairing);
+      }
+
+      await storage.createActivityLog({
+        eventId: event.id,
+        actorId: req.user!.id,
+        action: "pairings_generated",
+        payloadJson: JSON.stringify({ groupSize, groupCount: created.length, playerCount: playerIds.length }),
+      });
+
+      res.json({ success: true, groupCount: created.length, playerCount: playerIds.length });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   app.post("/api/pairings/:pairingId/members/:memberId/reorder", requireAuth, async (req: Request, res: Response) => {
     try {
       const member = await storage.getPairingMember(req.params.memberId);

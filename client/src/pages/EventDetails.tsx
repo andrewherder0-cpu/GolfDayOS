@@ -149,11 +149,14 @@ export default function EventDetails() {
     onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
   });
 
+  const [closeRsvpDialogOpen, setCloseRsvpDialogOpen] = useState(false);
+
   const finalizeMutation = useMutation({
     mutationFn: () => apiRequest("POST", `/api/events/${eventId}/finalize`, {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
-      toast({ title: "Event finalized!" });
+      setCloseRsvpDialogOpen(false);
+      toast({ title: "RSVP closed!", description: "Player list is locked. You can now generate teams." });
     },
     onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
   });
@@ -898,12 +901,59 @@ export default function EventDetails() {
                         </div>
                       </CardContent>
                     </Card>
+                    {event.state === "rsvp" && isOrganizer && (
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-base">Close RSVP</CardTitle>
+                          <CardDescription>Lock the player list and move to team setup</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <Dialog open={closeRsvpDialogOpen} onOpenChange={setCloseRsvpDialogOpen}>
+                            <DialogTrigger asChild>
+                              <Button className="w-full" data-testid="button-close-rsvp">
+                                <CheckCircle2 className="h-4 w-4 mr-2" />Close RSVP
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Close RSVP?</DialogTitle>
+                                <DialogDescription>
+                                  This will lock the player list. No new RSVPs or withdrawals will be accepted
+                                  after closing. You'll then be able to generate and manage team pairings.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="pt-2">
+                                <p className="text-sm text-muted-foreground mb-4">
+                                  Currently confirmed: <strong>{event.rsvps.filter(r => r.status === "joined").length} player{event.rsvps.filter(r => r.status === "joined").length !== 1 ? "s" : ""}</strong>
+                                </p>
+                                <div className="flex gap-2 justify-end">
+                                  <Button variant="outline" onClick={() => setCloseRsvpDialogOpen(false)}>
+                                    Cancel
+                                  </Button>
+                                  <Button
+                                    onClick={() => finalizeMutation.mutate()}
+                                    disabled={finalizeMutation.isPending}
+                                    data-testid="button-confirm-close-rsvp"
+                                  >
+                                    {finalizeMutation.isPending ? "Closing..." : "Close RSVP"}
+                                  </Button>
+                                </div>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        </CardContent>
+                      </Card>
+                    )}
                     {event.state === "final" && isOrganizer && (
                       <Card>
-                        <CardContent className="pt-4">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-base">Teams</CardTitle>
+                          <CardDescription>RSVP is closed — manage player groupings</CardDescription>
+                        </CardHeader>
+                        <CardContent>
                           <Link href={`/events/${eventId}/pairings`}>
                             <a>
-                              <Button className="w-full" variant="outline" data-testid="button-manage-pairings">
+                              <Button className="w-full" data-testid="button-manage-pairings">
                                 <Users className="h-4 w-4 mr-2" />Manage Pairings
                               </Button>
                             </a>
