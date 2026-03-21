@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useAuthContext } from "@/lib/AuthProvider";
 import { apiRequest } from "@/lib/queryClient";
-import { Vote, CheckCircle2, Calendar, MapPin, Plus } from "lucide-react";
+import { Vote, CheckCircle2, Calendar, MapPin, Plus, Trash2 } from "lucide-react";
 import type { Event, Group, Poll, PollOption, Vote as VoteType, Course } from "@shared/schema";
 
 interface PollWithDetails extends Poll {
@@ -36,9 +36,15 @@ export default function PollView() {
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [tiebreakSelection, setTiebreakSelection] = useState<string>("");
   const [newDateInputs, setNewDateInputs] = useState<Record<string, string>>({});
+  const [selectedCourseIds, setSelectedCourseIds] = useState<Record<string, string>>({});
 
   const { data: event, isLoading } = useQuery<EventWithPolls>({
     queryKey: ["/api/polls/event", eventId],
+    enabled: !!eventId,
+  });
+
+  const { data: allCourses = [] } = useQuery<Course[]>({
+    queryKey: ["/api/courses"],
     enabled: !!eventId,
   });
 
@@ -61,6 +67,33 @@ export default function PollView() {
     },
     onError: (err: unknown) => {
       const msg = err instanceof Error ? err.message : "Could not add date";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    },
+  });
+
+  const addCourseOptionMutation = useMutation({
+    mutationFn: ({ pollId, courseId }: { pollId: string; courseId: string }) =>
+      apiRequest("POST", `/api/polls/${pollId}/options`, { courseId }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/polls/event", eventId] });
+      setSelectedCourseIds(prev => ({ ...prev, [variables.pollId]: "" }));
+      toast({ title: "Course added to poll!" });
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Could not add course";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    },
+  });
+
+  const deletePollMutation = useMutation({
+    mutationFn: (pollId: string) => apiRequest("DELETE", `/api/polls/${pollId}`, undefined),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/polls/event", eventId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
+      toast({ title: "Poll deleted" });
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Could not delete poll";
       toast({ title: "Error", description: msg, variant: "destructive" });
     },
   });
@@ -109,12 +142,17 @@ export default function PollView() {
     addDateOptionMutation.mutate({ pollId, dateOption: dateStr });
   };
 
+  const handleAddCourse = (pollId: string) => {
+    const courseId = selectedCourseIds[pollId];
+    if (!courseId) return;
+    addCourseOptionMutation.mutate({ pollId, courseId });
+  };
+
   const getTopOptions = (poll: PollWithDetails) => {
     const maxVotes = Math.max(...poll.options.map((o) => o.voteCount));
     return poll.options.filter((o) => o.voteCount === maxVotes);
   };
 
-  // Get today in YYYY-MM-DD for min date input
   const todayStr = new Date().toISOString().split("T")[0];
 
   return (
@@ -143,6 +181,11 @@ export default function PollView() {
             const isTied = topOptions.length > 1 && totalVotes > 0;
             const isDatePoll = poll.type === "date";
 
+            const alreadyAddedCourseIds = new Set(
+              poll.options.map(o => o.courseId).filter(Boolean)
+            );
+            const availableCourses = allCourses.filter(c => !alreadyAddedCourseIds.has(c.id));
+
             return (
               <Card key={poll.id} data-testid={`card-poll-${poll.type}`}>
                 <CardHeader>
@@ -153,10 +196,27 @@ export default function PollView() {
                         {isDatePoll ? "Choose a Date" : "Choose a Course"}
                       </CardTitle>
                       <CardDescription>
-                        {hasVoted ? "You've voted" : poll.options.length === 0 ? "No options yet — add dates below" : "Select your preferred option"}
+                        {hasVoted ? "You've voted" : poll.options.length === 0 ? (isDatePoll ? "No options yet — suggest a date below" : "No courses added yet") : "Select your preferred option"}
                       </CardDescription>
                     </div>
-                    {hasVoted && <CheckCircle2 className="h-6 w-6 text-green-600" />}
+                    <div className="flex items-center gap-2">
+                      {hasVoted && <CheckCircle2 className="h-6 w-6 text-green-600" />}
+                      {isOwner && poll.visibility === "live" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            if (confirm("Delete this poll and all its votes?")) {
+                              deletePollMutation.mutate(poll.id);
+                            }
+                          }}
+                          disabled={deletePollMutation.isPending}
+                          data-testid={`button-delete-poll-${poll.type}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-1" />Delete Poll
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -184,9 +244,47 @@ export default function PollView() {
                     </div>
                   )}
 
+                  {/* Add course option — organizer only for course polls */}
+                  {!isDatePoll && poll.visibility === "live" && isOwner && (
+                    <div className="flex gap-2 items-center p-3 bg-muted/40 rounded-md">
+                      <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <Select
+                        value={selectedCourseIds[poll.id] || ""}
+                        onValueChange={(val) => setSelectedCourseIds(prev => ({ ...prev, [poll.id]: val }))}
+                      >
+                        <SelectTrigger className="flex-1" data-testid={`select-course-${poll.id}`}>
+                          <SelectValue placeholder="Select a course to add..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableCourses.length === 0 ? (
+                            <SelectItem value="_none" disabled>All courses already added</SelectItem>
+                          ) : (
+                            availableCourses.map(course => (
+                              <SelectItem key={course.id} value={course.id}>
+                                {course.name}{course.city ? ` — ${course.city}` : ""}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        size="sm"
+                        onClick={() => handleAddCourse(poll.id)}
+                        disabled={!selectedCourseIds[poll.id] || selectedCourseIds[poll.id] === "_none" || addCourseOptionMutation.isPending}
+                        data-testid={`button-add-course-${poll.id}`}
+                      >
+                        <Plus className="h-3 w-3 mr-1" />Add
+                      </Button>
+                    </div>
+                  )}
+
                   {poll.options.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-4">
-                      {isDatePoll ? "Use the date picker above to suggest dates for the group to vote on." : "No course options have been added yet."}
+                      {isDatePoll
+                        ? "Use the date picker above to suggest dates for the group to vote on."
+                        : isOwner
+                          ? "Use the dropdown above to add courses to this poll."
+                          : "No course options have been added yet."}
                     </p>
                   ) : !hasVoted ? (
                     <>

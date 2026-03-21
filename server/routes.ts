@@ -710,9 +710,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!poll) return res.status(404).json({ error: "Poll not found" });
 
       const event = await storage.getEvent(poll.eventId);
-      if (!event || !await isEventOrganizer(req.user!.id, event)) {
-        return res.status(403).json({ error: "Only event organizers can add poll options" });
-      }
+      if (!event) return res.status(404).json({ error: "Event not found" });
 
       if (poll.visibility === "hidden") {
         return res.status(400).json({ error: "Poll is closed" });
@@ -723,6 +721,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (poll.type === "course") {
+        if (!await isEventOrganizer(req.user!.id, event)) {
+          return res.status(403).json({ error: "Only event organizers can add course poll options" });
+        }
         const { courseId, label } = req.body;
         if (!courseId && !label) {
           return res.status(400).json({ error: "courseId or label required" });
@@ -746,6 +747,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (poll.type === "date") {
+        const membership = await storage.getMembership(req.user!.id, event.groupId);
+        if (!membership) {
+          return res.status(403).json({ error: "You must be a group member to suggest dates" });
+        }
         const { dateOption } = req.body;
         if (!dateOption) {
           return res.status(400).json({ error: "dateOption (ISO date string) required" });
@@ -774,6 +779,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       return res.status(400).json({ error: "Unknown poll type" });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(400).json({ error: message });
+    }
+  });
+
+  app.delete("/api/polls/:pollId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const poll = await storage.getPoll(req.params.pollId);
+      if (!poll) return res.status(404).json({ error: "Poll not found" });
+      const event = await storage.getEvent(poll.eventId);
+      if (!event || !await isEventOrganizer(req.user!.id, event)) {
+        return res.status(403).json({ error: "Only event organizers can delete polls" });
+      }
+      await storage.deletePoll(poll.id);
+      res.json({ success: true });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Unknown error";
       res.status(400).json({ error: message });

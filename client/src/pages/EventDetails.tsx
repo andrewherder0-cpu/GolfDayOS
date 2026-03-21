@@ -21,7 +21,7 @@ import { useAuthContext } from "@/lib/AuthProvider";
 import { apiRequest } from "@/lib/queryClient";
 import {
   Calendar, MapPin, Users, Vote, CheckCircle2, MessageSquare, Map,
-  ClipboardList, Settings, UserCog, Send, Mail, Crown, Shield, Clock, XCircle, UserCheck, Plus,
+  ClipboardList, Settings, UserCog, Send, Mail, Crown, Shield, Clock, XCircle, UserCheck, Plus, Trash2,
 } from "lucide-react";
 import { useState } from "react";
 import { Progress } from "@/components/ui/progress";
@@ -95,6 +95,7 @@ export default function EventDetails() {
   const [sendUpdateDialogOpen, setSendUpdateDialogOpen] = useState(false);
 
   const [newDateInputs, setNewDateInputs] = useState<Record<string, string>>({});
+  const [selectedCourseIds, setSelectedCourseIds] = useState<Record<string, string>>({});
 
   const { data: event, isLoading } = useQuery<EventWithDetails>({
     queryKey: ["/api/events", eventId],
@@ -106,6 +107,11 @@ export default function EventDetails() {
     enabled: !!eventId,
   });
   const detailedPolls = eventPollsData?.polls;
+
+  const { data: allCourses = [] } = useQuery<Course[]>({
+    queryKey: ["/api/courses"],
+    enabled: !!eventId,
+  });
 
   const canViewInvitations = !!event && (
     event.membership?.role === "owner" ||
@@ -224,6 +230,27 @@ export default function EventDetails() {
       queryClient.invalidateQueries({ queryKey: ["/api/polls/event", eventId] });
       setNewDateInputs(prev => ({ ...prev, [variables.pollId]: "" }));
       toast({ title: "Date suggested!" });
+    },
+    onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
+  });
+
+  const addCourseOptionMutation = useMutation({
+    mutationFn: ({ pollId, courseId }: { pollId: string; courseId: string }) =>
+      apiRequest("POST", `/api/polls/${pollId}/options`, { courseId }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/polls/event", eventId] });
+      setSelectedCourseIds(prev => ({ ...prev, [variables.pollId]: "" }));
+      toast({ title: "Course added to poll!" });
+    },
+    onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
+  });
+
+  const deletePollMutation = useMutation({
+    mutationFn: (pollId: string) => apiRequest("DELETE", `/api/polls/${pollId}`, undefined),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/polls/event", eventId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
+      toast({ title: "Poll deleted" });
     },
     onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
   });
@@ -417,6 +444,10 @@ export default function EventDetails() {
                     const isDate = poll.type === "date";
                     const sorted = [...(poll.options ?? [])].sort((a, b) => b.voteCount - a.voteCount);
                     const total = sorted.reduce((s, o) => s + o.voteCount, 0);
+                    const alreadyAddedCourseIds = new Set(
+                      (poll.options ?? []).map((o: PollOption) => o.courseId).filter(Boolean)
+                    );
+                    const availableCourses = allCourses.filter(c => !alreadyAddedCourseIds.has(c.id));
                     return (
                       <Card key={poll.id} data-testid={`card-poll-tab-${poll.type}`}>
                         <CardHeader className="pb-3">
@@ -434,6 +465,21 @@ export default function EventDetails() {
                                   </Button>
                                 </a>
                               </Link>
+                              {isOrganizer && poll.visibility === "live" && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    if (confirm("Delete this poll and all its votes?")) {
+                                      deletePollMutation.mutate(poll.id);
+                                    }
+                                  }}
+                                  disabled={deletePollMutation.isPending}
+                                  data-testid={`button-delete-poll-tab-${poll.type}`}
+                                >
+                                  <Trash2 className="h-3 w-3 mr-1" />Delete
+                                </Button>
+                              )}
                             </div>
                           </div>
                           <CardDescription>
@@ -468,9 +514,52 @@ export default function EventDetails() {
                             </div>
                           )}
 
+                          {/* Add course option (organizer only, course poll only) */}
+                          {!isDate && poll.visibility === "live" && isOrganizer && (
+                            <div className="flex gap-2 items-center p-3 bg-muted/40 rounded-md">
+                              <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                              <Select
+                                value={selectedCourseIds[poll.id] || ""}
+                                onValueChange={(val) => setSelectedCourseIds(prev => ({ ...prev, [poll.id]: val }))}
+                              >
+                                <SelectTrigger className="flex-1" data-testid={`select-course-tab-${poll.id}`}>
+                                  <SelectValue placeholder="Select a course to add..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {availableCourses.length === 0 ? (
+                                    <SelectItem value="_none" disabled>All courses already added</SelectItem>
+                                  ) : (
+                                    availableCourses.map(course => (
+                                      <SelectItem key={course.id} value={course.id}>
+                                        {course.name}{course.city ? ` — ${course.city}` : ""}
+                                      </SelectItem>
+                                    ))
+                                  )}
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  const courseId = selectedCourseIds[poll.id];
+                                  if (courseId && courseId !== "_none") {
+                                    addCourseOptionMutation.mutate({ pollId: poll.id, courseId });
+                                  }
+                                }}
+                                disabled={!selectedCourseIds[poll.id] || selectedCourseIds[poll.id] === "_none" || addCourseOptionMutation.isPending}
+                                data-testid={`button-add-course-tab-${poll.id}`}
+                              >
+                                <Plus className="h-3 w-3 mr-1" />Add
+                              </Button>
+                            </div>
+                          )}
+
                           {sorted.length === 0 ? (
                             <p className="text-sm text-muted-foreground text-center py-3">
-                              {isDate ? "No dates suggested yet — use the picker above." : "No courses added yet. Browse the Course Map tab to add courses."}
+                              {isDate
+                                ? "No dates suggested yet — use the picker above."
+                                : isOrganizer
+                                  ? "Use the dropdown above to add courses to this poll."
+                                  : "No courses added yet."}
                             </p>
                           ) : (
                             <div className="space-y-2">

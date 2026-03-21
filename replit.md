@@ -1,228 +1,52 @@
 # Golf Day OS
 
-A production-ready golf event management system built with Express.js, React, and TypeScript.
-
 ## Overview
 
-Golf Day OS helps groups organize golf events with a complete workflow: draft creation → course/date polling → RSVP management → pairing organization → tee sheet export.
-
-## Recent Changes
-
-- **March 21, 2026**: Email Invitation Flow (token-based)
-  - Added `invitations` PostgreSQL table (id, groupId, email, invitedBy, token, acceptedAt, expiresAt, createdAt)
-  - Storage methods: createInvitation, getInvitationByToken, listGroupInvitations, acceptInvitation
-  - `POST /api/groups/:id/invite-email` (owner only) — creates secure 64-hex token, 7-day expiry, stubs email
-  - `GET /api/groups/:id/invitations` (owner only) — lists all invitations for the group
-  - `GET /api/invitations/:token` (public) — returns group name, inviter name, email, expiry info
-  - `POST /api/invitations/:token/accept` (auth required) — creates membership + marks acceptedAt
-  - GroupDetails: invite form (owner-only email section), pending invitations card below members
-  - AcceptInvitation page at `/invitations/:token` — handles valid/expired/already-accepted states
-  - If logged in: "Join Group" button auto-accepts; if not: "Create Account" + "Sign In" links
-  - Login.tsx + Signup.tsx: support `?next=` redirect and `?email=` pre-fill (for invitation flow)
-  - End-to-end tested: invite send, pending list, accept page states, login redirect, signup pre-fill
-
-- **March 21, 2026**: Tournament Detail Tabs & Organizer Panel (Task #4)
-  - Added `"organizer"` role to `membershipRoleEnum` (Zod + Drizzle pgEnum); db:push applied
-  - `updateMembershipRole(userId, groupId, role)` added to IStorage + DatabaseStorage
-  - `PATCH /api/groups/:id/members/:userId/role` — owner-only role promotion/demotion
-  - `POST /api/events/:id/send-update` — stub broadcasts message to confirmed RSVPs
-  - `PATCH /api/events/:id` — now accepts organizer role (not just creator)
-  - All event lifecycle + pairing routes updated to accept organizer role via `isEventOrganizer()` helper
-  - `GET /api/events/:id` returns `membership`, `members` (with user) alongside existing fields
-  - EventDetails tabs: Overview | Polls | RSVP | **Players** | Course Map | Chat | **Settings** (organizer-gated)
-  - **Players tab**: all group members cross-referenced with RSVP status (Confirmed/Waitlisted/Withdrawn/No RSVP)
-  - **Settings tab**: lifecycle controls, edit event (draft only), RSVP summary, poll results with vote bars, send-update dialog, co-organizer role select (owner only), pending invitations
-  - `isOrganizer` computed as: `createdBy === user.id OR membership.role === "organizer"/"owner"`
-  - Map & Chat tabs pass `isOrganizer` instead of `isOwner` for broader access
-  - End-to-end tested: all 7 tabs render, edit event, send update, open polls all working
-
-- **March 21, 2026**: GTA Golf Course Map (secure iframe architecture)
-  - Added `phone` varchar field to courses table (schema + db:push)
-  - Seeded 25 real Greater Toronto Area golf courses with accurate lat/lng, phone, website, tags, and fee notes
-  - Backend `GET /api/maps/frame` serves a complete HTML page with Google Maps JS API initialized server-side (API key NEVER in React bundle or frontend JS)
-  - CourseMapView component: left side list (filtered course names/cities) + right iframe embed
-  - Filter syncs between side list and iframe via postMessage (type: "filter", "focusCourse")
-  - Iframe → parent postMessage for "selectCourse" and "addToPoll" events
-  - "Add to Poll" button in selected course detail panel (data-testid="selected-course-detail") and in iframe info windows
-  - All info window content HTML-escaped (esc() function) to prevent XSS
-  - New API routes: GET /api/courses/map, GET /api/maps/frame, POST /api/polls/:pollId/options, POST /api/seed/gta-courses
-  - GTA Course Map card always visible to all event members (not state-restricted)
-  - End-to-end tested: side list, filter, course selection detail panel, Add to Poll all working
-
-- **March 21, 2026**: In-App Tournament Chat
-  - Added `chatMessages` PostgreSQL table (event_id, user_id, content, created_at)
-  - Implemented `getChatMessages` and `createChatMessage` storage methods
-  - Added `GET /api/chat/event/:eventId` and `POST /api/chat/event/:eventId` routes (group membership gated)
-  - Built `ChatView` React component with 3-second polling, scrollable message list, avatar initials, timestamps
-  - Own messages displayed on right (primary bg); others on left (muted bg) with sender name
-  - Organizer badge shown for event creator messages
-  - Enter key (without Shift) sends message; Send icon button also available
-  - Integrated into EventDetails page as "Group Chat" card in the right sidebar
-  - End-to-end tested: send messages, keyboard shortcut, auto-clear input, organizer label all working
-
-- **October 31, 2025**: Landing Page Visual Enhancements
-  - Replaced hero background with animated gradient (green, gold) using Framer Motion
-  - Integrated 3 custom AI-generated images: dashboard mockup, golfers planning, pairings/scorecard
-  - Enhanced Pain Points section with Lucide icons (MessageSquare, UserX, ClipboardList, Shuffle)
-  - Upgraded How It Works section with visual step diagram (circular icon badges, connecting gradient line)
-  - Added floating decorative elements (Flag, Trophy, Sparkles) with subtle animations
-  - All icons sourced from Lucide React for consistent visual hierarchy
-  - Dashboard mockup shows realistic RSVP management interface
-  - Golfers planning scene adds authentic golf event context
-  - All animations optimized with viewport triggers and moderate durations
-  - End-to-end tested and architect approved (PASS verdict)
-
-- **October 31, 2025**: Authentication Flow Refinement
-  - Fixed signup/login redirect issues using auth-state-driven navigation
-  - Replaced setTimeout with useEffect that reacts to user state changes
-  - Enabled session persistence across page refreshes (refetchOnMount: true)
-  - Auth flow: signup/login → user set in cache → useEffect fires → navigate to dashboard
-  - Session validated on page load via GET /api/auth/me with session cookie
-  - Eliminated race conditions in redirect logic
-  - End-to-end tested: signup, login, logout, session persistence all working
-  - Architect reviewed and approved (PASS verdict with improvements implemented)
-
-- **October 31, 2025**: Professional Landing Page
-  - Built single-page landing with React, Tailwind CSS, and Framer Motion
-  - Comprehensive sections: Hero, Pain Points, Solution/Features, How It Works, Testimonials, FAQ, Final CTA
-  - Sticky navigation that transitions from transparent to solid on scroll
-  - Smooth scroll navigation to in-page sections
-  - Golf-themed color palette (deep green, sand, slate)
-  - Created 6 reusable landing components (NavBar, Footer, FeatureCard, PainPointCard, TestimonialCard, FAQItem)
-  - Added dedicated /signup route with clean form
-  - Comprehensive SEO metadata and Open Graph tags
-  - All content per specification with Unsplash images
-  - Framer Motion animations throughout (fade-in, slide-in, scale, hover effects)
-  - Fully responsive design (mobile-first)
-  - End-to-end tested and architect approved
-
-- **October 30, 2025**: Google Maps Places API Integration
-  - Added backend endpoint GET /api/courses/search-google for searching golf courses
-  - Added backend endpoint POST /api/courses/add-from-google for adding courses from results
-  - Updated Courses page with tabbed dialog (Google Maps + Manual Entry)
-  - Google Maps search: enter query → displays results → click Add → saved to database
-  - Auto-tags courses with 'google-maps', extracts city/region from formatted address
-  - Secures API key server-side (never exposed to frontend)
-  - Architect reviewed and approved (PASS verdict)
-  - Requires valid Google API key with Places API enabled and billing configured
-
-- **October 30, 2025**: Production-ready PostgreSQL database migration
-  - Migrated from in-memory storage to PostgreSQL with Drizzle ORM
-  - Created complete database schema with 12 tables and proper relations
-  - Implemented DatabaseStorage class with all 35+ storage methods
-  - All tables created: users, groups, memberships, courses, events, polls, pollOptions, votes, rsvps, pairings, pairingMembers, activityLogs
-  - Verified end-to-end functionality: signup, auth, groups, courses, RSVPs all working
-  - Production-grade persistence with foreign key constraints and proper indexes
-
-- **October 30, 2025**: Critical authentication optimization
-  - Implemented AuthProvider context to centralize authentication state
-  - Fixed duplicate /api/auth/me queries (was hammering backend, now single call)
-  - All pages now use useAuthContext() instead of direct useAuth() calls
-  - Significantly improved app performance and reduced server load
-
-- **2024**: Initial MVP implementation
-  - Complete user authentication system with email/password
-  - Group management with join codes
-  - Course directory with search and CSV import
-  - Event lifecycle management (draft → polling → RSVP → final)
-  - Polling system for course and date selection
-  - RSVP management with capacity limits and waitlists
-  - Pairing management with PDF/CSV export
-  - Activity logging throughout the system
-
-## Architecture
-
-### Frontend (React + TypeScript)
-- **Pages**: Login, Dashboard, Groups, Courses, Events, Polls, RSVP, Pairings, Settings
-- **State Management**: TanStack Query for server state, AuthProvider context for auth
-- **UI Components**: Shadcn UI with Tailwind CSS
-- **Design System**: Modern SaaS productivity (Linear/Notion inspired)
-- **Routing**: Wouter for client-side routing
-- **Authentication**: Centralized via AuthProvider context (client/src/lib/AuthProvider.tsx)
-
-### Backend (Express.js + TypeScript)
-- **Storage**: PostgreSQL database with Drizzle ORM (DatabaseStorage)
-- **Database**: 12 tables with foreign key relationships and proper indexes
-- **Authentication**: Session-based with HTTP-only cookies, bcrypt password hashing
-- **API Routes**:
-  - `/api/auth` - signup, login, logout, user management
-  - `/api/groups` - create, invite, join, list groups
-  - `/api/courses` - search, create, update, CSV import
-  - `/api/events` - full event lifecycle management
-  - `/api/polls` - voting, closing, applying results
-  - `/api/rsvps` - join, withdraw, claim waitlist spots
-  - `/api/pairings` - create/manage groups, export tee sheets
-
-### Data Model
-- **User**: email, name, phone, password hash
-- **Group**: name, join code, owner
-- **Membership**: user-group relationships with roles
-- **Course**: name, location, tags, fees, website
-- **Event**: title, state, capacity, chosen course/date
-- **Poll**: type (course/date), options, votes
-- **RSVP**: status (joined/waitlisted/withdrawn), position
-- **Pairing**: groups of players with tee times
-- **ActivityLog**: event audit trail
-
-## Security Notes
-
-- **Google Maps API Key**: The `GOOGLE_MAPS_API_KEY` is only used server-side (embedded in backend-rendered iframe HTML via `GET /api/maps/frame`). It is never bundled into the React frontend. For production, restrict this key in Google Cloud Console to specific HTTP referrers (your deployed domain) to prevent unauthorized usage.
-- **Email invitations**: Currently stub (console log). To enable real delivery, replace `sendEmail()` in `server/utils/email.ts` with a service like SendGrid or AWS SES.
+Golf Day OS is a comprehensive, production-ready golf event management system designed to streamline the organization of golf events. It provides a complete workflow from event drafting and course/date polling to RSVP management, pairing organization, and tee sheet export. The system aims to simplify the complexities of group golf event planning, offering a robust solution for organizers and participants.
 
 ## User Preferences
 
 None specified yet.
 
-## Technical Stack
+## System Architecture
 
-- **Runtime**: Node.js 20
-- **Frontend**: React 18, TypeScript, Vite
-- **Backend**: Express.js, TypeScript
-- **Database**: PostgreSQL (Neon) with Drizzle ORM
-- **Styling**: Tailwind CSS, Shadcn UI components
-- **Fonts**: Inter (primary), JetBrains Mono (code/join codes)
-- **State**: TanStack Query v5
-- **Validation**: Zod schemas with Drizzle-Zod integration
-- **Storage**: DatabaseStorage (PostgreSQL) - production-ready persistence
+### Frontend (React + TypeScript)
+- **Frameworks**: React 18, Vite
+- **UI/UX**: Modern SaaS productivity aesthetic, inspired by tools like Linear and Notion. Uses Shadcn UI with Tailwind CSS for components.
+- **State Management**: TanStack Query for server-side data, custom AuthProvider Context for authentication.
+- **Routing**: Wouter for client-side navigation.
+- **Core Pages**: Login, Dashboard, Group Management, Course Directory, Event Details (with tabs for Overview, Polls, RSVP, Players, Course Map, Chat, Settings), Invitations.
+- **Visual Enhancements**: Animated gradients, AI-generated imagery, Lucide icons, and Framer Motion for interactive elements and animations, optimized for responsiveness and performance.
 
-## Development
+### Backend (Express.js + TypeScript)
+- **Framework**: Express.js
+- **Database Interaction**: Drizzle ORM managing PostgreSQL.
+- **Authentication**: Session-based authentication using HTTP-only cookies and bcrypt for password hashing. Integrates a centralized AuthProvider context for efficient state management.
+- **API Structure**:
+    - `/api/auth`: User authentication and management.
+    - `/api/groups`: Group creation, invitations, and membership management.
+    - `/api/courses`: Search, creation, updates, and CSV import of golf courses. Includes Google Maps Places API integration with server-side key management.
+    - `/api/events`: Comprehensive event lifecycle management.
+    - `/api/polls`: Polling system for course and date selection, including vote management.
+    - `/api/rsvps`: RSVP handling with capacity limits and waitlist management.
+    - `/api/pairings`: Creation and management of player pairings and tee sheets.
+    - `/api/chat`: Real-time event-specific chat functionality.
+    - `/api/maps`: Secure server-side rendered Google Maps iframe for course viewing.
+- **Roles**: Implements `owner` and `organizer` roles for granular access control, particularly within event management.
 
-```bash
-# Install dependencies (handled automatically)
-npm install
+### Data Model (PostgreSQL with Drizzle ORM)
+- **Core Entities**: Users, Groups, Memberships, Courses, Events, Polls, Poll Options, Votes, RSVPs, Pairings, Pairing Members, Invitations, Chat Messages, Activity Logs.
+- **Relationships**: Robust foreign key constraints and indexing ensure data integrity and performance.
 
-# Start development server (frontend + backend)
-npm run dev
-```
+## External Dependencies
 
-The application runs on port 5000 with both frontend and backend served together.
-
-## Key Features
-
-1. **Authentication**: Email/password with secure sessions
-2. **Groups**: Create groups, generate join codes, invite members
-3. **Courses**: Searchable directory, CSV import, tags/filters
-4. **Events**: Multi-stage workflow (draft → polling → RSVP → final)
-5. **Polling**: Vote on courses and dates, tie-break handling
-6. **RSVP**: Capacity management, automatic waitlist, 24h claim windows
-7. **Pairings**: Manual group creation, tee time assignment, member ordering
-8. **Export**: PDF tee sheets, CSV rosters
-9. **Notifications**: Console-based email stubs (ready for real email integration)
-
-## Business Rules
-
-- **Polls**: One vote per user per poll, live tallies, owner can close and apply results
-- **RSVP**: Auto-waitlist when capacity reached, withdraw triggers waitlist promotion
-- **Waitlist Claims**: 24-hour window to claim promoted spots
-- **Event States**: draft → polling → rsvp → final → closed
-
-## Future Enhancements
-
-- Real email notifications (SendGrid/similar)
-- ICS calendar downloads  
-- Bulk nudge for non-voters/non-RSVPs
-- Drag-and-drop pairing management
-- Scoring and handicap tracking
-- Payment integration
-- Retry loop for join-code generation (edge case handling)
-- Connection pooling optimization for high-traffic scenarios
+- **Database**: PostgreSQL (specifically Neon for cloud deployment).
+- **Mapping Service**: Google Maps Places API (for course search and mapping, with server-side key management).
+- **UI Components**: Shadcn UI.
+- **Styling Framework**: Tailwind CSS.
+- **Animation Library**: Framer Motion.
+- **Icons**: Lucide React.
+- **Frontend State Management**: TanStack Query.
+- **Validation**: Zod (for schema validation).
+- **Fonts**: Inter, JetBrains Mono.
+- **Email Service**: Currently stubbed (console logging), designed for integration with third-party services like SendGrid or AWS SES for actual email delivery.

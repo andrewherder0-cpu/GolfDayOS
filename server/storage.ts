@@ -87,6 +87,7 @@ export interface IStorage {
   getEventPolls(eventId: string): Promise<Poll[]>;
   createPoll(poll: InsertPoll): Promise<Poll>;
   updatePoll(id: string, updates: Partial<Poll>): Promise<Poll | undefined>;
+  deletePoll(id: string): Promise<void>;
 
   // Poll Options
   getPollOption(id: string): Promise<PollOption | undefined>;
@@ -495,6 +496,17 @@ export class DatabaseStorage implements IStorage {
       closesAt: poll.closesAt ? poll.closesAt.toISOString() : undefined,
       createdAt: poll.createdAt.toISOString(),
     };
+  }
+
+  async deletePoll(id: string): Promise<void> {
+    const optionRows = await db.select({ id: pollOptions.id }).from(pollOptions).where(eq(pollOptions.pollId, id));
+    const optionIds = optionRows.map(o => o.id);
+    if (optionIds.length > 0) {
+      await db.delete(votes).where(inArray(votes.optionId, optionIds));
+    }
+    await db.delete(votes).where(eq(votes.pollId, id));
+    await db.delete(pollOptions).where(eq(pollOptions.pollId, id));
+    await db.delete(polls).where(eq(polls.id, id));
   }
 
   // Poll Options
