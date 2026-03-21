@@ -32,6 +32,7 @@ export function useAuth() {
       return await res.json();
     },
     onSuccess: (user) => {
+      queryClient.clear();
       queryClient.setQueryData(["/api/auth/me"], user);
     },
   });
@@ -42,6 +43,7 @@ export function useAuth() {
       return await res.json();
     },
     onSuccess: (user) => {
+      queryClient.clear();
       queryClient.setQueryData(["/api/auth/me"], user);
     },
   });
@@ -51,7 +53,7 @@ export function useAuth() {
       return apiRequest("POST", "/api/auth/logout", {});
     },
     onSuccess: () => {
-      queryClient.setQueryData(["/api/auth/me"], null);
+      queryClient.clear();
     },
   });
 
