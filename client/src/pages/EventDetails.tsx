@@ -105,9 +105,9 @@ export default function EventDetails() {
   const detailedPolls = eventPollsData?.polls;
 
   const canViewInvitations = !!event && (
+    event.membership?.role === "owner" ||
     event.createdBy === user?.id ||
-    event.membership?.role === "organizer" ||
-    event.membership?.role === "owner"
+    event.membership?.role === "organizer"
   );
 
   const { data: invitations } = useQuery<Invitation[]>({
@@ -215,8 +215,8 @@ export default function EventDetails() {
     );
   }
 
-  const isOwner = event.createdBy === user?.id;
-  const isOrganizer = isOwner || event.membership?.role === "organizer" || event.membership?.role === "owner";
+  const isOwner = event.membership?.role === "owner";
+  const isOrganizer = isOwner || event.createdBy === user?.id || event.membership?.role === "organizer";
   const joinedCount = event.rsvps.filter((r) => r.status === "joined").length;
   const waitlistedCount = event.rsvps.filter((r) => r.status === "waitlisted").length;
   const coursePoll = event.polls?.find(p => p.type === "course");
