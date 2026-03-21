@@ -256,7 +256,7 @@ export default function GroupDetails() {
                           <p className="text-sm font-medium truncate" data-testid={`invitation-email-${inv.id}`}>{inv.email}</p>
                           <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                             <Clock className="h-3 w-3 flex-shrink-0" />
-                            Expires {new Date(inv.expiresAt).toLocaleDateString()}
+                            Sent {new Date(inv.createdAt).toLocaleDateString()}
                           </p>
                         </div>
                       </div>

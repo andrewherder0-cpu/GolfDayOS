@@ -1,4 +1,5 @@
-import { useRoute, useLocation } from "wouter";
+import { useEffect, useState } from "react";
+import { useRoute, useLocation, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuthContext } from "@/lib/AuthProvider";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -7,7 +8,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Users, CheckCircle, XCircle, Clock } from "lucide-react";
-import { Link } from "wouter";
 
 interface InvitationInfo {
   token: string;
@@ -25,6 +25,7 @@ export default function AcceptInvitation() {
   const [, setLocation] = useLocation();
   const { user } = useAuthContext();
   const { toast } = useToast();
+  const [autoAccepted, setAutoAccepted] = useState(false);
 
   const { data: invitation, isLoading, error } = useQuery<InvitationInfo>({
     queryKey: ["/api/invitations", token],
@@ -40,7 +41,10 @@ export default function AcceptInvitation() {
   });
 
   const acceptMutation = useMutation({
-    mutationFn: () => apiRequest<{ groupId: string }>("POST", `/api/invitations/${token}/accept`, {}),
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/invitations/${token}/accept`, {});
+      return res.json() as Promise<{ groupId: string }>;
+    },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/groups/mine"] });
       toast({ title: "You've joined the group!", description: `Welcome to ${invitation?.groupName}` });
@@ -53,6 +57,15 @@ export default function AcceptInvitation() {
 
   const isExpired = invitation ? new Date(invitation.expiresAt) < new Date() : false;
   const isAlreadyAccepted = invitation?.acceptedAt != null;
+  const isValid = invitation && !isExpired && !isAlreadyAccepted;
+
+  // Auto-accept when user becomes authenticated and the invitation is valid
+  useEffect(() => {
+    if (user && isValid && !autoAccepted && !acceptMutation.isPending && !acceptMutation.isSuccess) {
+      setAutoAccepted(true);
+      acceptMutation.mutate();
+    }
+  }, [user, isValid, autoAccepted]);
 
   if (isLoading) {
     return (
@@ -147,6 +160,7 @@ export default function AcceptInvitation() {
     );
   }
 
+  // Valid invitation
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-md">
@@ -169,7 +183,7 @@ export default function AcceptInvitation() {
               <span className="font-medium">{invitation.groupName}</span>.
             </p>
             <p className="text-muted-foreground text-xs">
-              Invitation sent to {invitation.email} &mdash; expires{" "}
+              Invitation for {invitation.email} &mdash; expires{" "}
               {new Date(invitation.expiresAt).toLocaleDateString()}
             </p>
           </div>
@@ -182,7 +196,7 @@ export default function AcceptInvitation() {
               <Button
                 className="w-full"
                 onClick={() => acceptMutation.mutate()}
-                disabled={acceptMutation.isPending}
+                disabled={acceptMutation.isPending || autoAccepted}
                 data-testid="button-accept-invitation"
               >
                 {acceptMutation.isPending ? "Joining..." : `Join ${invitation.groupName}`}
@@ -191,7 +205,7 @@ export default function AcceptInvitation() {
           ) : (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                Create an account or sign in to accept this invitation.
+                Create an account or sign in to accept this invitation. You'll be added automatically.
               </p>
               <Link href={`/signup?email=${encodeURIComponent(invitation.email)}&next=${encodeURIComponent(`/invitations/${token}`)}`}>
                 <Button className="w-full" data-testid="button-create-account">
