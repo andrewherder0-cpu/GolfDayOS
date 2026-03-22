@@ -8,7 +8,7 @@ import { storage } from "./storage";
 import { requireAuth } from "./middleware/auth";
 import { generateTeeSheetPDF } from "./utils/pdf";
 import { randomBytes } from "crypto";
-import { notifyPollOpened, notifyRsvpOpened, notifySpotAvailable, notifyRosterLocked, notifyTeeSheetPosted, notifyGroupInvite } from "./utils/email";
+import { notifyPollOpened, notifyRsvpOpened, notifySpotAvailable, notifyRosterLocked, notifyTeeSheetPosted, notifyGroupInvite, notifyEventUpdate } from "./utils/email";
 import { insertUserSchema, insertGroupSchema, insertCourseSchema, insertEventSchema, updateEventSchema } from "@shared/schema";
 import { geocodeAndSeedCourses } from "./seed";
 
@@ -1078,12 +1078,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { message } = req.body;
       if (!message?.trim()) return res.status(400).json({ error: "Message is required" });
 
-      // Stub: in production, email all RSVPed members
       const rsvps = await storage.getEventRsvps(event.id);
       const joined = rsvps.filter(r => r.status === "joined");
 
-      console.log(`[send-update] Event "${event.title}" — ${joined.length} recipients — message: ${message}`);
+      const senderName = req.user!.name;
+      await Promise.all(
+        joined.map(async (rsvp) => {
+          const member = await storage.getUser(rsvp.userId);
+          if (member?.email) {
+            notifyEventUpdate(member.email, event.title, senderName, message.trim());
+          }
+        })
+      );
 
+      console.log(`[send-update] Event "${event.title}" — emailed ${joined.length} recipients`);
       res.json({ success: true, recipientCount: joined.length });
     } catch (error: any) {
       res.status(400).json({ error: error.message });

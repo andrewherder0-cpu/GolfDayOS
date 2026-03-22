@@ -65,6 +65,14 @@ export function notifyTeeSheetPosted(to: string, eventTitle: string): void {
   );
 }
 
+export function notifyEventUpdate(to: string, eventTitle: string, senderName: string, message: string): void {
+  sendEmail(
+    to,
+    `Update from ${senderName}: ${eventTitle}`,
+    `${senderName} sent an update for ${eventTitle}:\n\n${message}\n\nVisit Golf Day OS to view the full event details.`
+  );
+}
+
 export function notifyGroupInvite(to: string, inviterName: string, groupName: string, joinCode: string, joinUrl: string): void {
   sendEmail(
     to,
