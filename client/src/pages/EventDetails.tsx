@@ -23,7 +23,7 @@ import { useAuthContext } from "@/lib/AuthProvider";
 import { apiRequest } from "@/lib/queryClient";
 import {
   Calendar, MapPin, Users, Vote, CheckCircle2, MessageSquare, Map,
-  ClipboardList, Settings, UserCog, Send, Mail, Crown, Shield, Clock, XCircle, UserCheck, Plus, Trash2, ChevronsUpDown, X,
+  ClipboardList, Settings, UserCog, Send, Mail, Crown, Shield, Clock, XCircle, UserCheck, Plus, Trash2, ChevronsUpDown, X, Trophy,
 } from "lucide-react";
 import { useState } from "react";
 import { Progress } from "@/components/ui/progress";
@@ -74,6 +74,27 @@ interface Invitation {
   acceptedAt: string | null;
   expiresAt: string;
   createdAt: string;
+}
+
+interface PairingMemberWithUser {
+  id: string;
+  pairingId: string;
+  userId: string;
+  orderInt: number;
+  user: User;
+}
+
+interface PairingWithMembers {
+  id: string;
+  eventId: string;
+  name?: string;
+  teeTimeText?: string;
+  members: PairingMemberWithUser[];
+}
+
+interface PairingsResponse {
+  pairings: PairingWithMembers[];
+  availablePlayers: User[];
 }
 
 export default function EventDetails() {
@@ -129,6 +150,13 @@ export default function EventDetails() {
   const { data: invitations } = useQuery<Invitation[]>({
     queryKey: ["/api/groups", event?.groupId, "invitations"],
     enabled: canViewInvitations,
+  });
+
+  const isTeamsVisible = event?.state === "final" || event?.state === "closed";
+
+  const { data: pairingsData } = useQuery<PairingsResponse>({
+    queryKey: ["/api/pairings/event", eventId],
+    enabled: !!eventId && isTeamsVisible,
   });
 
   const openPollsMutation = useMutation({
@@ -324,7 +352,7 @@ export default function EventDetails() {
 
   const defaultTab = event.state === "polling" ? "polls"
     : event.state === "rsvp" ? "rsvp"
-    : event.state === "final" || event.state === "closed" ? "rsvp"
+    : event.state === "final" || event.state === "closed" ? "teams"
     : "overview";
 
   function initials(name: string) {
@@ -371,6 +399,11 @@ export default function EventDetails() {
             <TabsTrigger value="rsvp" data-testid="tab-rsvp">
               <Users className="h-4 w-4 mr-2" />RSVP
             </TabsTrigger>
+            {isTeamsVisible && (
+              <TabsTrigger value="teams" data-testid="tab-teams">
+                <Trophy className="h-4 w-4 mr-2" />Teams
+              </TabsTrigger>
+            )}
             <TabsTrigger value="players" data-testid="tab-players">
               <UserCog className="h-4 w-4 mr-2" />Players
             </TabsTrigger>
@@ -1040,6 +1073,104 @@ export default function EventDetails() {
               </Card>
             )}
           </TabsContent>
+
+          {/* TEAMS TAB */}
+          {isTeamsVisible && (
+            <TabsContent value="teams">
+              <div className="space-y-6">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div>
+                    <h2 className="text-xl font-semibold">Teams</h2>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {pairingsData?.pairings?.length
+                        ? `${pairingsData.pairings.length} team${pairingsData.pairings.length !== 1 ? "s" : ""} · ${joinedCount} confirmed players`
+                        : "No teams have been set up yet"}
+                    </p>
+                  </div>
+                  {isOrganizer && (
+                    <Link href={`/events/${eventId}/pairings`}>
+                      <a>
+                        <Button variant="outline" data-testid="button-manage-teams">
+                          <Trophy className="h-4 w-4 mr-2" />Manage Teams
+                        </Button>
+                      </a>
+                    </Link>
+                  )}
+                </div>
+
+                {!pairingsData?.pairings?.length ? (
+                  <Card>
+                    <CardContent className="pt-10 pb-10 text-center">
+                      <Trophy className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground mb-1">No teams yet</p>
+                      {isOrganizer && (
+                        <p className="text-xs text-muted-foreground">
+                          Use Manage Teams to create groupings and assign tee times
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {pairingsData.pairings.map((pairing, idx) => (
+                      <Card key={pairing.id} data-testid={`card-team-${pairing.id}`}>
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <CardTitle className="text-base">
+                              {pairing.name || `Team ${idx + 1}`}
+                            </CardTitle>
+                            {pairing.teeTimeText && (
+                              <Badge variant="secondary" className="font-mono text-xs">
+                                <Clock className="h-3 w-3 mr-1" />{pairing.teeTimeText}
+                              </Badge>
+                            )}
+                          </div>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <div className="space-y-2">
+                            {pairing.members.map((member) => (
+                              <div key={member.id} className="flex items-center gap-2">
+                                <Avatar className="h-7 w-7">
+                                  <AvatarFallback className="text-xs">
+                                    {member.user?.name
+                                      ? member.user.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
+                                      : "?"}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="text-sm">{member.user?.name ?? "Unknown player"}</span>
+                              </div>
+                            ))}
+                            {pairing.members.length === 0 && (
+                              <p className="text-xs text-muted-foreground">No players assigned yet</p>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+
+                {pairingsData?.availablePlayers && pairingsData.availablePlayers.length > 0 && isOrganizer && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm text-muted-foreground">
+                        {pairingsData.availablePlayers.length} player{pairingsData.availablePlayers.length !== 1 ? "s" : ""} not yet assigned to a team
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <div className="flex flex-wrap gap-2">
+                        {pairingsData.availablePlayers.map((player) => player && (
+                          <Badge key={player.id} variant="outline" data-testid={`badge-unassigned-${player.id}`}>
+                            {player.name}
+                          </Badge>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </TabsContent>
+          )}
 
           {/* PLAYERS TAB */}
           <TabsContent value="players">
