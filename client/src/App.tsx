@@ -8,6 +8,8 @@ import { Navigation } from "@/components/Navigation";
 import Home from "@/pages/Home";
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
+import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
 import Dashboard from "@/pages/Dashboard";
 import GroupNew from "@/pages/GroupNew";
 import GroupDetails from "@/pages/GroupDetails";
@@ -49,6 +51,8 @@ function Router() {
 
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
+      <Route path="/forgot-password" component={ForgotPassword} />
+      <Route path="/reset-password" component={ResetPassword} />
 
       <Route path="/dashboard">
         <ProtectedRoute component={Dashboard} />

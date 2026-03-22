@@ -8,7 +8,7 @@ import { storage } from "./storage";
 import { requireAuth } from "./middleware/auth";
 import { generateTeeSheetPDF } from "./utils/pdf";
 import { randomBytes } from "crypto";
-import { notifyPollOpened, notifyRsvpOpened, notifySpotAvailable, notifyRosterLocked, notifyTeeSheetPosted, notifyGroupInvite, notifyEventUpdate } from "./utils/email";
+import { notifyPollOpened, notifyRsvpOpened, notifySpotAvailable, notifyRosterLocked, notifyTeeSheetPosted, notifyGroupInvite, notifyEventUpdate, sendPasswordReset } from "./utils/email";
 import { insertUserSchema, insertGroupSchema, insertCourseSchema, insertEventSchema, updateEventSchema } from "@shared/schema";
 import { geocodeAndSeedCourses } from "./seed";
 
@@ -126,6 +126,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(userWithoutPassword);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/auth/forgot-password", async (req: Request, res: Response) => {
+    try {
+      const { email } = req.body;
+      if (!email || typeof email !== "string") {
+        return res.status(400).json({ error: "Email is required" });
+      }
+      const user = await storage.getUserByEmail(email.trim().toLowerCase());
+      // Always return success to prevent user enumeration
+      if (user) {
+        const token = randomBytes(32).toString("hex");
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+        await storage.createPasswordResetToken(user.id, token, expiresAt);
+        const proto = req.headers["x-forwarded-proto"] || req.protocol;
+        const host = req.headers["x-forwarded-host"] || req.headers.host;
+        const origin = `${proto}://${host}`;
+        const resetUrl = `${origin}/reset-password?token=${token}`;
+        sendPasswordReset(user.email, resetUrl);
+      }
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/auth/reset-password", async (req: Request, res: Response) => {
+    try {
+      const { token, password } = req.body;
+      if (!token || typeof token !== "string") {
+        return res.status(400).json({ error: "Token is required" });
+      }
+      if (!password || typeof password !== "string" || password.length < 8) {
+        return res.status(400).json({ error: "Password must be at least 8 characters" });
+      }
+      const record = await storage.getPasswordResetToken(token);
+      if (!record) {
+        return res.status(400).json({ error: "Invalid or expired reset link" });
+      }
+      if (record.usedAt) {
+        return res.status(400).json({ error: "This reset link has already been used" });
+      }
+      if (new Date() > record.expiresAt) {
+        return res.status(400).json({ error: "This reset link has expired" });
+      }
+      const passwordHash = await bcrypt.hash(password, 12);
+      await storage.updateUserPassword(record.userId, passwordHash);
+      await storage.markPasswordResetTokenUsed(record.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 

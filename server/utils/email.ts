@@ -73,6 +73,14 @@ export function notifyEventUpdate(to: string, eventTitle: string, senderName: st
   );
 }
 
+export function sendPasswordReset(to: string, resetUrl: string): void {
+  sendEmail(
+    to,
+    'Reset your Golf Day OS password',
+    `You requested a password reset for your Golf Day OS account.\n\nClick the link below to set a new password. This link expires in 1 hour.\n\n${resetUrl}\n\nIf you did not request this, you can safely ignore this email — your password will not change.`
+  );
+}
+
 export function notifyGroupInvite(to: string, inviterName: string, groupName: string, joinCode: string, joinUrl: string): void {
   sendEmail(
     to,

@@ -141,6 +141,18 @@ export default function Login() {
                 : "Log In"}
             </Button>
 
+            {!isSignup && (
+              <div className="text-center">
+                <a
+                  href="/forgot-password"
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  data-testid="link-forgot-password"
+                >
+                  Forgot your password?
+                </a>
+              </div>
+            )}
+
             <div className="text-center text-sm">
               <button
                 type="button"

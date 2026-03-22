@@ -16,6 +16,7 @@ import {
   activityLogs,
   chatMessages,
   invitations,
+  passwordResetTokens,
 } from "@shared/schema";
 import type {
   User,
@@ -48,6 +49,7 @@ import type {
   InsertChatMessage,
   Invitation,
   InsertInvitation,
+  PasswordResetToken,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -56,6 +58,12 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, updates: Partial<Omit<User, "id" | "passwordHash" | "createdAt">>): Promise<User | undefined>;
+  updateUserPassword(id: string, passwordHash: string): Promise<void>;
+
+  // Password Reset Tokens
+  createPasswordResetToken(userId: string, token: string, expiresAt: Date): Promise<PasswordResetToken>;
+  getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined>;
+  markPasswordResetTokenUsed(id: string): Promise<void>;
 
   // Groups
   getGroup(id: string): Promise<Group | undefined>;
@@ -195,6 +203,24 @@ export class DatabaseStorage implements IStorage {
       ...user,
       createdAt: user.createdAt.toISOString(),
     };
+  }
+
+  async updateUserPassword(id: string, passwordHash: string): Promise<void> {
+    await db.update(users).set({ passwordHash }).where(eq(users.id, id));
+  }
+
+  async createPasswordResetToken(userId: string, token: string, expiresAt: Date): Promise<PasswordResetToken> {
+    const [row] = await db.insert(passwordResetTokens).values({ userId, token, expiresAt }).returning();
+    return row;
+  }
+
+  async getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined> {
+    const [row] = await db.select().from(passwordResetTokens).where(eq(passwordResetTokens.token, token));
+    return row ?? undefined;
+  }
+
+  async markPasswordResetTokenUsed(id: string): Promise<void> {
+    await db.update(passwordResetTokens).set({ usedAt: new Date() }).where(eq(passwordResetTokens.id, id));
   }
 
   // Groups
@@ -946,6 +972,35 @@ export class MemStorage implements IStorage {
     const updated = { ...user, ...updates };
     this.users.set(id, updated);
     return updated;
+  }
+
+  async updateUserPassword(id: string, passwordHash: string): Promise<void> {
+    const user = this.users.get(id);
+    if (user) this.users.set(id, { ...user, passwordHash });
+  }
+
+  private passwordResetTokens: Map<string, PasswordResetToken> = new Map();
+
+  async createPasswordResetToken(userId: string, token: string, expiresAt: Date): Promise<PasswordResetToken> {
+    const row: PasswordResetToken = {
+      id: randomUUID(),
+      userId,
+      token,
+      expiresAt,
+      usedAt: null,
+      createdAt: new Date(),
+    };
+    this.passwordResetTokens.set(row.id, row);
+    return row;
+  }
+
+  async getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined> {
+    return Array.from(this.passwordResetTokens.values()).find((t) => t.token === token);
+  }
+
+  async markPasswordResetTokenUsed(id: string): Promise<void> {
+    const row = this.passwordResetTokens.get(id);
+    if (row) this.passwordResetTokens.set(id, { ...row, usedAt: new Date() });
   }
 
   // Groups
