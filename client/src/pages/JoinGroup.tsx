@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Navigation } from "@/components/Navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,9 +41,7 @@ export default function JoinGroup() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navigation />
-      <main className="max-w-2xl mx-auto p-8">
+    <main className="max-w-2xl mx-auto p-8">
         <Link href="/dashboard">
           <a className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6" data-testid="link-back">
             <ArrowLeft className="h-4 w-4" />
@@ -102,7 +99,6 @@ export default function JoinGroup() {
             </form>
           </CardContent>
         </Card>
-      </main>
-    </div>
+    </main>
   );
 }

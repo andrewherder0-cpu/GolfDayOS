@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useRoute } from "wouter";
-import { Navigation } from "@/components/Navigation";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -109,32 +108,24 @@ export default function GroupDetails() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <Navigation />
-        <main className="max-w-7xl mx-auto p-8">
-          <Skeleton className="h-8 w-64 mb-6" />
-          <Skeleton className="h-96 w-full" />
-        </main>
-      </div>
+      <main className="max-w-7xl mx-auto p-8">
+        <Skeleton className="h-8 w-64 mb-6" />
+        <Skeleton className="h-96 w-full" />
+      </main>
     );
   }
 
   if (!group) {
     return (
-      <div className="min-h-screen bg-background">
-        <Navigation />
-        <main className="max-w-7xl mx-auto p-8">
-          <p>Group not found</p>
-        </main>
-      </div>
+      <main className="max-w-7xl mx-auto p-8">
+        <p>Group not found</p>
+      </main>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navigation />
-      <main className="max-w-7xl mx-auto p-8">
-        <Breadcrumbs items={[{ label: "Dashboard", href: "/dashboard" }, { label: group.name }]} />
+    <main className="max-w-7xl mx-auto p-8">
+      <Breadcrumbs items={[{ label: "Dashboard", href: "/dashboard" }, { label: group.name }]} />
 
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Group Info */}
@@ -482,7 +473,6 @@ export default function GroupDetails() {
             </div>
           </div>
         </div>
-      </main>
-    </div>
+    </main>
   );
 }

@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuthContext } from "./lib/AuthProvider";
+import { Navigation } from "@/components/Navigation";
 import Home from "@/pages/Home";
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
@@ -36,7 +37,7 @@ function Router() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="h-full flex items-center justify-center">
         <div className="text-muted-foreground">Loading...</div>
       </div>
     );
@@ -44,19 +45,15 @@ function Router() {
 
   return (
     <Switch>
-      {/* Landing page */}
       <Route path="/" component={Home} />
-      
-      {/* Auth routes */}
+
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
-      
-      {/* Dashboard */}
+
       <Route path="/dashboard">
         <ProtectedRoute component={Dashboard} />
       </Route>
 
-      {/* Groups */}
       <Route path="/groups/new">
         <ProtectedRoute component={GroupNew} />
       </Route>
@@ -67,12 +64,10 @@ function Router() {
         <ProtectedRoute component={GroupDetails} />
       </Route>
 
-      {/* Courses */}
       <Route path="/courses">
         <ProtectedRoute component={Courses} />
       </Route>
 
-      {/* Events */}
       <Route path="/groups/:groupId/events/new">
         <ProtectedRoute component={EventNew} />
       </Route>
@@ -89,15 +84,12 @@ function Router() {
         <ProtectedRoute component={Pairings} />
       </Route>
 
-      {/* Settings */}
       <Route path="/settings">
         <ProtectedRoute component={Settings} />
       </Route>
 
-      {/* Invitations */}
       <Route path="/invitations/:token" component={AcceptInvitation} />
 
-      {/* 404 */}
       <Route component={NotFound} />
     </Switch>
   );
@@ -108,8 +100,13 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <TooltipProvider>
+          <div className="h-screen flex flex-col overflow-hidden">
+            <Navigation />
+            <div className="flex-1 overflow-y-auto bg-background">
+              <Router />
+            </div>
+          </div>
           <Toaster />
-          <Router />
         </TooltipProvider>
       </AuthProvider>
     </QueryClientProvider>

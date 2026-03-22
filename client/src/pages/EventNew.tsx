@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation, useRoute, Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Navigation } from "@/components/Navigation";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -97,9 +96,7 @@ export default function EventNew() {
   if (!group) return null;
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navigation />
-      <main className="max-w-2xl mx-auto p-8">
+    <main className="max-w-2xl mx-auto p-8">
         <Breadcrumbs
           items={[
             { label: "Dashboard", href: "/dashboard" },
@@ -216,7 +213,6 @@ export default function EventNew() {
             </form>
           </CardContent>
         </Card>
-      </main>
-    </div>
+    </main>
   );
 }

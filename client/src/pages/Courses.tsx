@@ -1,6 +1,5 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Navigation } from "@/components/Navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -140,9 +139,7 @@ export default function Courses() {
   });
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navigation />
-      <main className="max-w-7xl mx-auto p-8">
+    <main className="max-w-7xl mx-auto p-8">
         <div className="mb-8">
           <h1 className="text-3xl font-semibold mb-2" data-testid="text-page-title">Course Directory</h1>
           <p className="text-muted-foreground">Browse and manage golf courses</p>
@@ -424,7 +421,6 @@ export default function Courses() {
             </div>
           )}
         </div>
-      </main>
-    </div>
+    </main>
   );
 }

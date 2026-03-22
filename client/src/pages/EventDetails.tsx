@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useRoute, useLocation } from "wouter";
-import { Navigation } from "@/components/Navigation";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CapacityBar } from "@/components/CapacityBar";
@@ -31,6 +30,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { Event, Group, Course, Poll, Rsvp, User, Membership } from "@shared/schema";
 import { ChatView } from "@/components/ChatView";
 import { CourseMapView } from "@/components/CourseMapView";
+
 
 function getErrorMessage(e: unknown): string {
   return e instanceof Error ? e.message : "An unexpected error occurred";
@@ -334,12 +334,9 @@ export default function EventDetails() {
 
   if (isLoading || !event) {
     return (
-      <div className="min-h-screen bg-background">
-        <Navigation />
-        <main className="max-w-7xl mx-auto p-8">
-          <Skeleton className="h-96 w-full" />
-        </main>
-      </div>
+      <main className="max-w-7xl mx-auto p-8">
+        <Skeleton className="h-96 w-full" />
+      </main>
     );
   }
 
@@ -365,9 +362,7 @@ export default function EventDetails() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navigation />
-      <main className="max-w-7xl mx-auto p-8">
+    <main className="max-w-7xl mx-auto p-8">
         <Breadcrumbs
           items={[
             { label: "Dashboard", href: "/dashboard" },
@@ -1690,7 +1685,6 @@ export default function EventDetails() {
             </TabsContent>
           )}
         </Tabs>
-      </main>
 
       {/* Delete Event confirmation dialog */}
       <Dialog open={deleteEventDialogOpen} onOpenChange={setDeleteEventDialogOpen}>
@@ -1714,6 +1708,6 @@ export default function EventDetails() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </main>
   );
 }

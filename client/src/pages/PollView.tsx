@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useRoute, useLocation } from "wouter";
-import { Navigation } from "@/components/Navigation";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -159,12 +158,9 @@ export default function PollView() {
 
   if (isLoading || !event) {
     return (
-      <div className="min-h-screen bg-background">
-        <Navigation />
-        <main className="max-w-4xl mx-auto p-8">
-          <Skeleton className="h-96" />
-        </main>
-      </div>
+      <main className="max-w-4xl mx-auto p-8">
+        <Skeleton className="h-96" />
+      </main>
     );
   }
 
@@ -203,9 +199,7 @@ export default function PollView() {
   const todayStr = new Date().toISOString().split("T")[0];
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navigation />
-      <main className="max-w-4xl mx-auto p-8">
+    <main className="max-w-4xl mx-auto p-8">
         <Breadcrumbs
           items={[
             { label: "Dashboard", href: "/dashboard" },
@@ -605,7 +599,6 @@ export default function PollView() {
             </a>
           </Link>
         </div>
-      </main>
-    </div>
+    </main>
   );
 }
