@@ -165,9 +165,8 @@ export default function EventDetails() {
   });
 
   const deleteEventMutation = useMutation({
-    mutationFn: async (): Promise<{ success: boolean; groupId?: string }> => {
-      const res = await apiRequest("DELETE", `/api/events/${eventId}`);
-      return res.json();
+    mutationFn: (): Promise<{ success: boolean; groupId?: string }> => {
+      return apiRequest<{ success: boolean; groupId?: string }>("DELETE", `/api/events/${eventId}`);
     },
     onSuccess: (data) => {
       const groupId = data?.groupId ?? event?.groupId;
@@ -223,9 +222,8 @@ export default function EventDetails() {
 
   const sendUpdateMutation = useMutation({
     mutationFn: (message: string) =>
-      apiRequest("POST", `/api/events/${eventId}/send-update`, { message }),
-    onSuccess: async (res) => {
-      const data = await res.json().catch(() => ({}));
+      apiRequest<{ recipientCount?: number }>("POST", `/api/events/${eventId}/send-update`, { message }),
+    onSuccess: (data) => {
       toast({ title: `Update sent to ${data.recipientCount ?? 0} members!` });
       setSendUpdateMsg("");
       setSendUpdateDialogOpen(false);
@@ -245,8 +243,8 @@ export default function EventDetails() {
 
   const applyPollOptionMutation = useMutation({
     mutationFn: ({ pollId, optionId }: { pollId: string; optionId: string }) =>
-      apiRequest("POST", `/api/polls/${pollId}/apply-result`, { winningOptionId: optionId }),
-    onSuccess: (data: { success: boolean; transitioned: boolean; newState: string }) => {
+      apiRequest<{ success: boolean; transitioned: boolean; newState: string }>("POST", `/api/polls/${pollId}/apply-result`, { winningOptionId: optionId }),
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/polls/event", eventId] });
       queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
       if (data.transitioned) {
@@ -295,9 +293,8 @@ export default function EventDetails() {
   });
 
   const deletePollOptionMutation = useMutation({
-    mutationFn: async (optionId: string): Promise<{ success: boolean }> => {
-      const res = await apiRequest("DELETE", `/api/polls/options/${optionId}`, undefined);
-      return res.json();
+    mutationFn: (optionId: string): Promise<{ success: boolean }> => {
+      return apiRequest<{ success: boolean }>("DELETE", `/api/polls/options/${optionId}`, undefined);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/polls/event", eventId] });

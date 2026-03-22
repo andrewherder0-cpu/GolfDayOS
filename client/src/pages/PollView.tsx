@@ -117,9 +117,8 @@ export default function PollView() {
   });
 
   const deletePollOptionMutation = useMutation({
-    mutationFn: async (optionId: string): Promise<{ success: boolean }> => {
-      const res = await apiRequest("DELETE", `/api/polls/options/${optionId}`, undefined);
-      return res.json();
+    mutationFn: (optionId: string): Promise<{ success: boolean }> => {
+      return apiRequest<{ success: boolean }>("DELETE", `/api/polls/options/${optionId}`, undefined);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/polls/event", eventId] });
@@ -142,8 +141,8 @@ export default function PollView() {
 
   const applyResultMutation = useMutation({
     mutationFn: ({ pollId, winningOptionId }: { pollId: string; winningOptionId?: string }) =>
-      apiRequest("POST", `/api/polls/${pollId}/apply-result`, { winningOptionId }),
-    onSuccess: (data: { success: boolean; transitioned: boolean; newState: string }) => {
+      apiRequest<{ success: boolean; transitioned: boolean; newState: string }>("POST", `/api/polls/${pollId}/apply-result`, { winningOptionId }),
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/polls/event", eventId] });
       queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
       if (data.transitioned) {

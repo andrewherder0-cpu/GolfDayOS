@@ -37,9 +37,8 @@ export default function Dashboard() {
   });
 
   const joinGroupMutation = useMutation({
-    mutationFn: async (code: string): Promise<{ id: string; name: string }> => {
-      const res = await apiRequest("POST", `/api/groups/join/${code}`);
-      return res.json();
+    mutationFn: (code: string): Promise<{ id: string; name: string }> => {
+      return apiRequest<{ id: string; name: string }>("POST", `/api/groups/join/${code}`);
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/groups/mine"] });

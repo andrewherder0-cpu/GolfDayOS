@@ -10,8 +10,7 @@ export function useAuth() {
     retry: false,
     queryFn: async () => {
       try {
-        const res = await apiRequest("GET", "/api/auth/me");
-        return await res.json();
+        return await apiRequest<User>("GET", "/api/auth/me");
       } catch (error: any) {
         if (error.message?.includes("401")) {
           return null;
@@ -27,9 +26,8 @@ export function useAuth() {
   });
 
   const loginMutation = useMutation({
-    mutationFn: async (credentials: { email: string; password: string }) => {
-      const res = await apiRequest("POST", "/api/auth/login", credentials);
-      return await res.json();
+    mutationFn: (credentials: { email: string; password: string }) => {
+      return apiRequest<User>("POST", "/api/auth/login", credentials);
     },
     onSuccess: (user) => {
       queryClient.clear();
@@ -38,9 +36,8 @@ export function useAuth() {
   });
 
   const signupMutation = useMutation({
-    mutationFn: async (data: InsertUser) => {
-      const res = await apiRequest("POST", "/api/auth/signup", data);
-      return await res.json();
+    mutationFn: (data: InsertUser) => {
+      return apiRequest<User>("POST", "/api/auth/signup", data);
     },
     onSuccess: (user) => {
       queryClient.clear();
@@ -49,7 +46,7 @@ export function useAuth() {
   });
 
   const logoutMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: () => {
       return apiRequest("POST", "/api/auth/logout", {});
     },
     onSuccess: () => {

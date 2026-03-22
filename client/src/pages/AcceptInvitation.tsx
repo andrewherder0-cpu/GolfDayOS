@@ -41,11 +41,8 @@ export default function AcceptInvitation() {
   });
 
   const acceptMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", `/api/invitations/${token}/accept`, {});
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || "Failed to accept invitation");
-      return body as { groupId: string };
+    mutationFn: () => {
+      return apiRequest<{ groupId: string }>("POST", `/api/invitations/${token}/accept`, {});
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/groups/mine"] });

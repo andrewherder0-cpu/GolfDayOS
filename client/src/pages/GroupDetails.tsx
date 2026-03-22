@@ -75,9 +75,8 @@ export default function GroupDetails() {
   });
 
   const removeMemberMutation = useMutation({
-    mutationFn: async (userId: string): Promise<{ success: boolean }> => {
-      const res = await apiRequest("DELETE", `/api/groups/${groupId}/members/${userId}`);
-      return res.json();
+    mutationFn: (userId: string): Promise<{ success: boolean }> => {
+      return apiRequest<{ success: boolean }>("DELETE", `/api/groups/${groupId}/members/${userId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/groups", groupId] });
@@ -88,9 +87,8 @@ export default function GroupDetails() {
   });
 
   const deleteGroupMutation = useMutation({
-    mutationFn: async (): Promise<{ success: boolean }> => {
-      const res = await apiRequest("DELETE", `/api/groups/${groupId}`);
-      return res.json();
+    mutationFn: (): Promise<{ success: boolean }> => {
+      return apiRequest<{ success: boolean }>("DELETE", `/api/groups/${groupId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
