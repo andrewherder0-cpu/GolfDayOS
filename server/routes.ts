@@ -1984,6 +1984,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // TEMPORARY ADMIN: wipe polls for an event and revert state
+  app.post("/api/admin/reset-event-polls", async (req: Request, res: Response) => {
+    try {
+      const { eventId, secret } = req.body;
+      if (!secret || secret !== "GolfDayOS-admin-reset-2026-oneshot") {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      const event = await storage.getEvent(eventId);
+      if (!event) return res.status(404).json({ error: "Event not found" });
+
+      const polls = await storage.getEventPolls(eventId);
+      for (const poll of polls) {
+        const options = await storage.getPollOptions(poll.id);
+        for (const opt of options) {
+          await storage.deletePollOption(opt.id);
+        }
+        await storage.deletePoll(poll.id);
+      }
+      await storage.updateEvent(eventId, { state: "polling", chosenDate: null, chosenCourseId: null });
+      res.json({ success: true, pollsDeleted: polls.length });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
