@@ -110,6 +110,11 @@ export default function EventDetails() {
   const [createDatePoll, setCreateDatePoll] = useState(true);
   const [coursePollMultiSelect, setCoursePollMultiSelect] = useState(false);
   const [datePollMultiSelect, setDatePollMultiSelect] = useState(false);
+  const [addPollDialogOpen, setAddPollDialogOpen] = useState(false);
+  const [addCoursePoll, setAddCoursePoll] = useState(false);
+  const [addDatePoll, setAddDatePoll] = useState(false);
+  const [addCoursePollMultiSelect, setAddCoursePollMultiSelect] = useState(false);
+  const [addDatePollMultiSelect, setAddDatePollMultiSelect] = useState(false);
 
   const [editTitle, setEditTitle] = useState("");
   const [editNotes, setEditNotes] = useState("");
@@ -136,6 +141,11 @@ export default function EventDetails() {
     enabled: !!eventId,
   });
   const detailedPolls = eventPollsData?.polls;
+  const hasCoursePoll = !!detailedPolls?.some(p => p.type === "course");
+  const hasDatePoll = !!detailedPolls?.some(p => p.type === "date");
+  const canAddCoursePoll = !hasCoursePoll;
+  const canAddDatePoll = !hasDatePoll;
+  const canAddAnyPoll = canAddCoursePoll || canAddDatePoll;
 
   const { data: allCourses = [] } = useQuery<Course[]>({
     queryKey: ["/api/courses"],
@@ -166,6 +176,25 @@ export default function EventDetails() {
       queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
       toast({ title: "Polls opened successfully!" });
       setPollDialogOpen(false);
+    },
+    onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
+  });
+
+  const addPollMutation = useMutation({
+    mutationFn: () =>
+      apiRequest("POST", `/api/events/${eventId}/polls/open`, {
+        createCoursePoll: addCoursePoll,
+        createDatePoll: addDatePoll,
+        coursePollMultiSelect: addCoursePollMultiSelect,
+        datePollMultiSelect: addDatePollMultiSelect,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/polls/event", eventId] });
+      toast({ title: "Poll added successfully!" });
+      setAddPollDialogOpen(false);
+      setAddCoursePoll(false);
+      setAddDatePoll(false);
     },
     onError: (e: unknown) => toast({ title: "Error", description: getErrorMessage(e), variant: "destructive" }),
   });
@@ -535,6 +564,64 @@ export default function EventDetails() {
               const todayStr = new Date().toISOString().split("T")[0];
               return (
                 <div className="space-y-4">
+                  {isOrganizer && canAddAnyPoll && (
+                    <div className="flex justify-end">
+                      <Dialog open={addPollDialogOpen} onOpenChange={setAddPollDialogOpen}>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="sm" data-testid="button-add-poll-tab">
+                            <Plus className="h-4 w-4 mr-2" />Add Poll
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Add a Poll</DialogTitle>
+                            <DialogDescription>Open an additional poll for group members to vote on</DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            {canAddCoursePoll && (
+                              <div className="space-y-2">
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox id="addCoursePollTab" checked={addCoursePoll}
+                                    onCheckedChange={(c) => setAddCoursePoll(c as boolean)}
+                                    data-testid="checkbox-add-course-poll-tab" />
+                                  <Label htmlFor="addCoursePollTab" className="cursor-pointer font-medium">Create Course Poll</Label>
+                                </div>
+                                {addCoursePoll && (
+                                  <div className="ml-6 flex items-center space-x-2">
+                                    <Checkbox id="addCoursePollMultiSelectTab" checked={addCoursePollMultiSelect}
+                                      onCheckedChange={(c) => setAddCoursePollMultiSelect(c as boolean)} />
+                                    <Label htmlFor="addCoursePollMultiSelectTab" className="cursor-pointer text-sm text-muted-foreground">Allow multiple selections</Label>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            {canAddDatePoll && (
+                              <div className="space-y-2">
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox id="addDatePollTab" checked={addDatePoll}
+                                    onCheckedChange={(c) => setAddDatePoll(c as boolean)}
+                                    data-testid="checkbox-add-date-poll-tab" />
+                                  <Label htmlFor="addDatePollTab" className="cursor-pointer font-medium">Create Date Poll</Label>
+                                </div>
+                                {addDatePoll && (
+                                  <div className="ml-6 flex items-center space-x-2">
+                                    <Checkbox id="addDatePollMultiSelectTab" checked={addDatePollMultiSelect}
+                                      onCheckedChange={(c) => setAddDatePollMultiSelect(c as boolean)} />
+                                    <Label htmlFor="addDatePollMultiSelectTab" className="cursor-pointer text-sm text-muted-foreground">Allow multiple selections</Label>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            <Button onClick={() => addPollMutation.mutate()}
+                              disabled={addPollMutation.isPending || (!addCoursePoll && !addDatePoll)}
+                              data-testid="button-confirm-add-poll-tab">
+                              {addPollMutation.isPending ? "Adding..." : "Add Poll"}
+                            </Button>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  )}
                   {(detailedPolls ?? []).map((poll) => {
                     const isDate = poll.type === "date";
                     const sorted = [...(poll.options ?? [])].sort((a, b) => b.voteCount - a.voteCount);
@@ -1349,6 +1436,64 @@ export default function EventDetails() {
                             <Vote className="h-4 w-4 mr-2" />View Polls
                           </Button></a>
                         </Link>
+                        {isOrganizer && canAddAnyPoll && (
+                          <Dialog open={addPollDialogOpen} onOpenChange={setAddPollDialogOpen}>
+                            <DialogTrigger asChild>
+                              <Button variant="outline" data-testid="button-add-poll">
+                                <Plus className="h-4 w-4 mr-2" />Add Poll
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Add a Poll</DialogTitle>
+                                <DialogDescription>Open an additional poll for group members to vote on</DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                {canAddCoursePoll && (
+                                  <div className="space-y-2">
+                                    <div className="flex items-center space-x-2">
+                                      <Checkbox id="addCoursePoll" checked={addCoursePoll}
+                                        onCheckedChange={(c) => setAddCoursePoll(c as boolean)}
+                                        data-testid="checkbox-add-course-poll" />
+                                      <Label htmlFor="addCoursePoll" className="cursor-pointer font-medium">Create Course Poll</Label>
+                                    </div>
+                                    {addCoursePoll && (
+                                      <div className="ml-6 flex items-center space-x-2">
+                                        <Checkbox id="addCoursePollMultiSelect" checked={addCoursePollMultiSelect}
+                                          onCheckedChange={(c) => setAddCoursePollMultiSelect(c as boolean)}
+                                          data-testid="checkbox-add-course-poll-multi" />
+                                        <Label htmlFor="addCoursePollMultiSelect" className="cursor-pointer text-sm text-muted-foreground">Allow multiple selections</Label>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                                {canAddDatePoll && (
+                                  <div className="space-y-2">
+                                    <div className="flex items-center space-x-2">
+                                      <Checkbox id="addDatePoll" checked={addDatePoll}
+                                        onCheckedChange={(c) => setAddDatePoll(c as boolean)}
+                                        data-testid="checkbox-add-date-poll" />
+                                      <Label htmlFor="addDatePoll" className="cursor-pointer font-medium">Create Date Poll</Label>
+                                    </div>
+                                    {addDatePoll && (
+                                      <div className="ml-6 flex items-center space-x-2">
+                                        <Checkbox id="addDatePollMultiSelect" checked={addDatePollMultiSelect}
+                                          onCheckedChange={(c) => setAddDatePollMultiSelect(c as boolean)}
+                                          data-testid="checkbox-add-date-poll-multi" />
+                                        <Label htmlFor="addDatePollMultiSelect" className="cursor-pointer text-sm text-muted-foreground">Allow multiple selections</Label>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                                <Button onClick={() => addPollMutation.mutate()}
+                                  disabled={addPollMutation.isPending || (!addCoursePoll && !addDatePoll)}
+                                  data-testid="button-confirm-add-poll">
+                                  {addPollMutation.isPending ? "Adding..." : "Add Poll"}
+                                </Button>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        )}
                         {event.chosenCourseId && event.chosenDate && (
                           <Button onClick={() => openRsvpMutation.mutate()}
                             disabled={openRsvpMutation.isPending}

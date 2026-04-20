@@ -1009,21 +1009,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Only event organizers can open polls" });
       }
 
-      if (event.state !== "draft") {
-        return res.status(400).json({ error: "Can only open polls for draft events" });
+      if (event.state !== "draft" && event.state !== "polling") {
+        return res.status(400).json({ error: "Can only open polls for events in draft or polling state" });
       }
 
       const { createCoursePoll, createDatePoll, coursePollMultiSelect, datePollMultiSelect } = req.body;
 
-      if (createCoursePoll) {
-        const poll = await storage.createPoll({
+      // Check which poll types already exist to prevent duplicates
+      const existingPolls = await storage.getEventPolls(event.id);
+      const hasCoursePoll = existingPolls.some(p => p.type === "course");
+      const hasDatePoll = existingPolls.some(p => p.type === "date");
+
+      if (createCoursePoll && !hasCoursePoll) {
+        await storage.createPoll({
           eventId: event.id,
           type: "course",
           multiSelect: !!coursePollMultiSelect,
           visibility: "live",
         });
 
-        // In a real app, you'd have a form to add options - for now, stub with empty
         await storage.createActivityLog({
           eventId: event.id,
           actorId: req.user!.id,
@@ -1032,8 +1036,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      if (createDatePoll) {
-        const poll = await storage.createPoll({
+      if (createDatePoll && !hasDatePoll) {
+        await storage.createPoll({
           eventId: event.id,
           type: "date",
           multiSelect: !!datePollMultiSelect,
@@ -1048,7 +1052,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      await storage.updateEvent(event.id, { state: "polling" });
+      // Move event to polling state if it isn't already
+      if (event.state === "draft") {
+        await storage.updateEvent(event.id, { state: "polling" });
+      }
 
       res.json({ success: true });
     } catch (error: any) {
